@@ -1,0 +1,450 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Candidate verification experiment</title>
+<style>
+  body { max-width: 960px; margin: 36px auto; padding: 0 20px; font: 15px/1.5 system-ui; color: #19252c; }
+  h1 { font-size: 24px; } h2 { font-size: 18px; margin-top: 28px; }
+  button, select { font: inherit; margin: 0 8px 12px 0; padding: 5px 10px; }
+  canvas { width: min(768px, 100%); border: 1px solid #bbb; image-rendering: pixelated; }
+  pre { white-space: pre-wrap; background: #f2f4f5; padding: 16px; overflow-wrap: anywhere; }
+  table { border-collapse: collapse; width: 100%; } th, td { text-align: left; padding: 6px 12px; border-bottom: 1px solid #ddd; }
+  .pass { color: #17633b; } .fail { color: #ab2424; }
+</style>
+<h1>Candidate verification experiment — throwaway</h1>
+<p>Does a cached colour lookup followed by an isolated 1×1 redraw prevent unrelated-object picks,
+while preserving thin targets? Both reads require alpha 255. A returned shape must have fully
+opaque coverage at the sampled pixel; draw order may be ambiguous at overlapping edges.</p>
+<p>Reference coverage comes from independently rendering each shape into a full-size mask.
+The primary check rejects returned IDs with zero reference coverage. Stricter checks also
+look for exact agreement about opaque pixels; failures there expose rasterisation differences.
+The library is unchanged. The script below contains a snapshot refreshed by the runner.</p>
+<button id="run">Run comparisons again</button>
+<span id="status">Running…</span>
+<h2>Explore a scene</h2>
+<select id="scene"></select><button id="probe">Sample the example point</button>
+<p id="description"></p>
+<canvas id="view"></canvas>
+<pre id="sample">Move over the canvas to compare the three methods.</pre>
+<h2>Checks</h2><p id="verdict"></p><table id="checks"></table>
+<h2>Complete-buffer comparisons</h2><pre id="scans"></pre>
+<h2>Timing</h2>
+<p>Median microseconds per pick over five batches. This measures this prototype in this browser,
+with cached buffers; it excludes redraws after scene changes.</p>
+<pre id="timing"></pre>
+<details><summary>Machine-readable results</summary><pre id="results">pending</pre></details>
+<script type="module">
+/* BEGIN LIBRARY SNAPSHOT */
+// Colour-buffer picking for canvas 2D, in three independent layers:
+//   createPicker    - draws shapes in flat colours, reads an index back at x,y
+//   createIdPicker  - string ids on top, redraws lazily when something changed
+//   trackPointer    - turns pointer events into enter/leave/down/up/click per id
+
+// A shape does geometry only (path, fill(), stroke(), lineWidth).
+// It must not set fillStyle or strokeStyle.
+                     
+                                                                    
+         
+
+                                                    
+
+// Six bits of the index per colour channel. The low two bits are slack: when
+// a shape's own fill and stroke overlap, antialiasing can shift a channel by
+// one, and pick() has to read the same index back anyway.
+function channel(bits        ) {
+  return ((bits & 63) << 2) | 2
+}
+
+export function createPicker(width        , height        ) {
+  const canvas = new OffscreenCanvas(width, height)
+  const ctx = canvas.getContext('2d', { willReadFrequently: true }) 
+
+  return {
+    // Set the same transform here as on the visible canvas.
+    ctx,
+
+    clear() {
+      ctx.save()
+      ctx.resetTransform()
+      ctx.clearRect(0, 0, width, height)
+      ctx.restore()
+    },
+
+    // index is an integer, 1..0x3ffff
+    draw(index        , shape       ) {
+      const r = channel(index >> 12)
+      const g = channel(index >> 6)
+      const b = channel(index)
+      ctx.fillStyle = ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`
+      shape(ctx)
+    },
+
+    // All nine pixels must be opaque and decode to the same index.
+    // This rejects isolated false matches and narrow bands of blended colours.
+    pick(x        , y        ) {
+      const { data } = ctx.getImageData(Math.floor(x) - 1, Math.floor(y) - 1, 3, 3)
+      const index = (i        ) =>
+        data[i * 4 + 3] === 255
+          ? ((data[i * 4] >> 2) << 12) | ((data[i * 4 + 1] >> 2) << 6) | (data[i * 4 + 2] >> 2)
+          : 0
+
+      const centre = index(4)
+      for (let i = 0; i < 9; i++) {
+        if (index(i) !== centre) return 0
+      }
+      return centre
+    },
+  }
+}
+
+export function createIdPicker(picker        ) {
+  const shapes = new Map               ()
+  const ids = new Map                ()
+  let dirty = false
+
+  function redraw() {
+    picker.clear()
+    ids.clear()
+    let n = 1
+    for (const [id, shape] of shapes) {
+      // Scrambled so that a blend of two colours is unlikely to be a valid one.
+      const index = Math.imul(n++, 0x9e3779b1) & 0x3ffff
+      ids.set(index, id)
+      picker.draw(index, shape)
+    }
+    dirty = false
+  }
+
+  return {
+    // Later ids are drawn on top of earlier ones.
+    set(id        , shape       ) {
+      shapes.set(id, shape)
+      dirty = true
+    },
+
+    delete(id        ) {
+      shapes.delete(id)
+      dirty = true
+    },
+
+    clear() {
+      shapes.clear()
+      dirty = true
+    },
+
+    // Call when a shape's geometry or the picker's transform changed.
+    invalidate() {
+      dirty = true
+    },
+
+    pick(x        , y        ) {
+      if (dirty) redraw()
+      return ids.get(picker.pick(x, y))
+    },
+  }
+}
+
+                                                                          
+
+// Empty space is a target like any other, with an undefined id. Every event
+// carries the id under the pointer or undefined, and moving from a shape onto
+// nothing emits leave for the shape, then enter with undefined. The pointer is
+// captured on down, so up still arrives when the pointer is released outside
+// the element.
+export function trackPointer(
+  el             ,
+  pick                                              ,
+  emit                                                                         ,
+) {
+  let hovered                    
+
+  function hover(id                    , e            ) {
+    if (id === hovered) return
+    emit('leave', hovered, e)
+    emit('enter', id, e)
+    hovered = id
+  }
+
+  el.addEventListener('pointermove', (e) => hover(pick(e.offsetX, e.offsetY), e))
+  el.addEventListener('pointerleave', (e) => hover(undefined, e))
+  el.addEventListener('pointerdown', (e) => {
+    el.setPointerCapture(e.pointerId)
+    emit('down', pick(e.offsetX, e.offsetY), e)
+  })
+  el.addEventListener('pointerup', (e) => emit('up', pick(e.offsetX, e.offsetY), e))
+  el.addEventListener('click', (e) => emit('click', pick(e.offsetX, e.offsetY), e))
+}
+
+// Optional pick shapes for Path2D geometry. pick.ts does not depend on this.
+
+                                   
+
+// The inside of a closed path, grown outward by margin on every side.
+export function filled(path        , margin = 0)        {
+  return (ctx) => {
+    ctx.fill(path)
+    if (margin > 0) {
+      ctx.lineWidth = margin * 2
+      ctx.stroke(path)
+    }
+  }
+}
+
+// A line or curve, as a band of the given width centred on it.
+export function stroked(path        , width        )        {
+  return (ctx) => {
+    ctx.lineWidth = width
+    ctx.stroke(path)
+  }
+}
+
+/* END LIBRARY SNAPSHOT */
+
+// Experimental alternative only. The library's createPicker/createIdPicker above
+// remain the baseline; the candidate pass reads their cached buffer directly.
+function createTrial(width, height, entries, transform = [1, 0, 0, 1, 0, 0]) {
+  const buffer = createPicker(width, height);
+  buffer.ctx.setTransform(...transform);
+  const baseline = createIdPicker(buffer);
+  const candidates = new Map();
+  entries.forEach((entry, i) => {
+    baseline.set(entry.id, entry.shape);
+    candidates.set(Math.imul(i + 1, 0x9e3779b1) & 0x3ffff, entry);
+  });
+  baseline.pick(0, 0); // Materialise the same lazy buffer as the actual library.
+  const scratch = new OffscreenCanvas(1, 1).getContext('2d', { willReadFrequently: true });
+  const decode = ([r, g, b, a]) => a === 255 ? ((r >> 2) << 12) | ((g >> 2) << 6) | (b >> 2) : 0;
+  const read = (x, y) => buffer.ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+  function verify(x, y) {
+    const px = Math.floor(x), py = Math.floor(y);
+    const rgba = read(px, py);
+    const index = decode(rgba);
+    const candidate = candidates.get(index);
+    if (!candidate) return { id: undefined, candidate: undefined, rgba: [...rgba], confirmation: null };
+    scratch.reset();
+    const m = buffer.ctx.getTransform();
+    // Subtract in buffer pixels, after the scene's transform. Retain the same
+    // integer pixel grid as getImageData, including for fractional queries.
+    scratch.setTransform(m.a, m.b, m.c, m.d, m.e - px, m.f - py);
+    scratch.fillStyle = scratch.strokeStyle = 'rgb(' + channel(index >> 12) + ',' + channel(index >> 6) + ',' + channel(index) + ')';
+    candidate.shape(scratch);
+    const confirmation = scratch.getImageData(0, 0, 1, 1).data;
+    return { id: decode(confirmation) === index ? candidate.id : undefined, candidate: candidate.id, rgba: [...rgba], confirmation: [...confirmation] };
+  }
+  return {
+    width, height, entries, transform, buffer, baseline, verify,
+    raw: (x, y) => candidates.get(decode(read(x, y)))?.id,
+    pick: (x, y) => verify(x, y).id,
+  };
+}
+
+const rect = (x, y, w, h) => ctx => { ctx.beginPath(); ctx.rect(x, y, w, h); ctx.fill(); };
+const circle = (x, y, r) => { const p = new Path2D(); p.arc(x, y, r, 0, Math.PI * 2); return p; };
+const checks = [];
+const check = (name, expected, actual) => checks.push({ name, pass: actual === expected, expected: expected ?? null, actual: actual ?? null });
+const scenes = [];
+
+function collisionEntries(count = 16, background = 6, foreground = 16, edge = 8.4921875, covering = false) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: 'shape-' + (i + 1),
+    shape: i + 1 === foreground ? rect(edge, 0, 12, 20)
+      : i + 1 === background || (covering && i + 1 === 11) ? rect(0, 0, 20, 20)
+      : rect(26, 26, 2, 2),
+  }));
+}
+
+function referenceMasks(scene) {
+  const ctx = new OffscreenCanvas(scene.width, scene.height).getContext('2d', { willReadFrequently: true });
+  return new Map(scene.entries.map(entry => {
+    ctx.reset(); ctx.setTransform(...scene.transform);
+    ctx.fillStyle = ctx.strokeStyle = '#fff';
+    entry.shape(ctx);
+    const rgba = ctx.getImageData(0, 0, scene.width, scene.height).data;
+    const alpha = new Uint8Array(scene.width * scene.height);
+    for (let i = 0; i < alpha.length; i++) alpha[i] = rgba[i * 4 + 3];
+    return [entry.id, alpha];
+  }));
+}
+
+function scan(scene) {
+  const masks = referenceMasks(scene);
+  const methods = { singlePixel: scene.raw, ninePixelAgreement: scene.baseline.pick, verifiedCandidate: scene.pick };
+  const stats = Object.fromEntries(Object.keys(methods).map(name => [name, { hits: 0, noCoverage: 0, partialCoverage: 0, overlapEdgeAmbiguities: 0, missedOpaqueTopmost: 0 }]));
+  const coverageDifferences = [], coverageHistogram = {}, missedInteriors = [], rejectedAlphaHistogram = {};
+  for (let y = 0; y < scene.height; y++) for (let x = 0; x < scene.width; x++) {
+    const offset = y * scene.width + x;
+    const top = scene.entries.findLast(entry => masks.get(entry.id)[offset] > 0);
+    const topAlpha = top ? masks.get(top.id)[offset] : 0;
+    for (const [name, pick] of Object.entries(methods)) {
+      const id = pick(x, y), s = stats[name];
+      if (id !== undefined) {
+        s.hits++;
+        const alpha = masks.get(id)[offset];
+        if (alpha === 0) s.noCoverage++;
+        else if (alpha !== 255) {
+          s.partialCoverage++;
+          if (name === 'verifiedCandidate') {
+            coverageHistogram[alpha] = (coverageHistogram[alpha] ?? 0) + 1;
+            if (coverageDifferences.length < 3) coverageDifferences.push({ pixel: [x, y], id, referenceAlpha: alpha, probes: compareScratchSizes(scene, id, x, y) });
+          }
+        }
+        if (alpha === 255 && top && id !== top.id && topAlpha < 255) s.overlapEdgeAmbiguities++;
+      }
+      if (topAlpha === 255 && id !== top.id) {
+        s.missedOpaqueTopmost++;
+        if (name === 'verifiedCandidate') {
+          const alpha = scene.verify(x, y).confirmation?.[3] ?? 0;
+          rejectedAlphaHistogram[alpha] = (rejectedAlphaHistogram[alpha] ?? 0) + 1;
+          if (missedInteriors.length < 3) missedInteriors.push({ pixel: [x, y], expected: top.id, actual: id ?? null, probes: compareScratchSizes(scene, top.id, x, y) });
+        }
+      }
+    }
+  }
+  return { pixels: scene.width * scene.height, shapes: scene.entries.length, ...stats, coverageHistogram, rejectedAlphaHistogram, coverageDifferences, missedInteriors };
+}
+
+function compareScratchSizes(scene, id, x, y) {
+  const entry = scene.entries.find(e => e.id === id);
+  const n = scene.entries.indexOf(entry) + 1;
+  const index = Math.imul(n, 0x9e3779b1) & 0x3ffff;
+  const color = 'rgb(' + channel(index >> 12) + ',' + channel(index >> 6) + ',' + channel(index) + ')';
+  const m = scene.buffer.ctx.getTransform();
+  const probes = {};
+  for (const size of [1, 3, 5, 9, 33]) {
+    const ctx = new OffscreenCanvas(size, size).getContext('2d', { willReadFrequently: true });
+    const r = size >> 1;
+    ctx.setTransform(m.a, m.b, m.c, m.d, m.e - x + r, m.f - y + r);
+    ctx.fillStyle = ctx.strokeStyle = color;
+    entry.shape(ctx);
+    probes[size + '×' + size] = [...ctx.getImageData(r, r, 1, 1).data];
+  }
+  const ctx = new OffscreenCanvas(scene.width, scene.height).getContext('2d', { willReadFrequently: true });
+  ctx.setTransform(m); ctx.fillStyle = ctx.strokeStyle = color; entry.shape(ctx);
+  probes.fullSize = [...ctx.getImageData(x, y, 1, 1).data];
+  return probes;
+}
+
+function seededCircles(count, width, height) {
+  let seed = 0x12345678;
+  const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  return Array.from({ length: count }, (_, i) => {
+    const path = circle(random() * width, random() * height, 2 + random() * 14);
+    return { id: 'circle-' + (i + 1), shape: i % 5 === 0 ? stroked(path, 1 + i % 7) : filled(path, i % 3 === 0 ? 2 : 0) };
+  });
+}
+
+function benchmark(scene) {
+  const queries = Array.from({ length: 3000 }, (_, i) => [(i * 37) % scene.width + 0.3, (i * 53) % scene.height + 0.7]);
+  const methods = { singlePixel: scene.raw, ninePixelAgreement: scene.baseline.pick, verifiedCandidate: scene.pick };
+  const samples = Object.fromEntries(Object.keys(methods).map(name => [name, []]));
+  let hits = 0;
+  for (const pick of Object.values(methods)) for (let i = 0; i < 150; i++) pick(...queries[i]);
+  const names = Object.keys(methods);
+  for (let round = 0; round < 5; round++) for (let j = 0; j < names.length; j++) {
+    const name = names[(round + j) % names.length], pick = methods[name];
+    const start = performance.now();
+    for (const [x, y] of queries) if (pick(x, y) !== undefined) hits++;
+    samples[name].push((performance.now() - start) * 1000 / queries.length);
+  }
+  return { queriesPerBatch: queries.length, batches: 5, units: 'microseconds/pick', methods: Object.fromEntries(names.map(name => [name, { median: +samples[name].sort((a, b) => a - b)[2].toFixed(2), samples: samples[name].map(x => +x.toFixed(2)) }])), hits };
+}
+
+function run() {
+  checks.length = 0; scenes.length = 0;
+  const known = createTrial(32, 32, collisionEntries());
+  check('reproduces the unrelated raw ID', 'shape-11', known.raw(8, 10));
+  check('rejects that unrelated candidate', undefined, known.pick(8, 10));
+  check('the unrelated candidate draws nothing in isolation', 0, known.verify(8, 10).confirmation[3]);
+  check('retains the solid topmost interior', 'shape-16', known.pick(12, 10));
+  scenes.push({ name: 'Known distant-object collision', scene: known, point: [8, 10], description: 'Shapes 6 and 16 overlap here. Their blend decodes as shape 11, whose actual geometry is at the lower right.' });
+
+  let rejected = 0, rawWrong = 0;
+  for (let step = 0; step <= 256; step++) {
+    const scene = createTrial(32, 32, collisionEntries(16, 6, 16, 8 + step / 256));
+    const raw = scene.raw(8, 10), verified = scene.pick(8, 10);
+    if (raw && raw !== 'shape-6' && raw !== 'shape-16') { rawWrong++; if (verified === undefined) rejected++; }
+  }
+  check('all unrelated candidates in the 257-position sweep are rejected', rawWrong, rejected);
+  check('the sweep exercises at least one collision', true, rawWrong > 0);
+
+  const thin = createTrial(16, 16, [{ id: 'thin-line', shape: rect(4, 2, 1, 10) }]);
+  check('accepts an opaque one-pixel-wide target', 'thin-line', thin.pick(4, 6));
+  check('the current 3×3 rule rejects that target', undefined, thin.baseline.pick(4, 6));
+  const tiny = createTrial(16, 16, [{ id: 'tiny-dot', shape: rect(4, 4, 1, 1) }]);
+  check('accepts an opaque one-pixel dot', 'tiny-dot', tiny.pick(4, 4));
+  check('fractional queries use the same pixel grid', 'tiny-dot', tiny.pick(4.9, 4.1));
+  scenes.push({ name: 'One-pixel-wide target', scene: thin, point: [4, 6], description: 'The thin target is opaque at this pixel. Verification accepts it without needing a 3×3 solid interior.' });
+
+  const edge = createTrial(16, 16, [{ id: 'edge', shape: rect(8.5, 0, 7, 16) }]);
+  const edgeSample = edge.verify(8, 5);
+  check('the first-alpha fixture is partially transparent', true, edgeSample.rgba[3] > 0 && edgeSample.rgba[3] < 255);
+  check('rejects a non-opaque first read', undefined, edgeSample.id);
+  check('skips verification when the first read is non-opaque', null, edgeSample.confirmation);
+
+  let partialConfirmation = null;
+  for (let step = 1; step <= 32 && !partialConfirmation; step++) {
+    const scene = createTrial(32, 32, collisionEntries(2, 1, 2, 8 + step / 256));
+    const result = scene.verify(8, 10);
+    if (result.candidate === 'shape-2' && result.confirmation[3] > 0 && result.confirmation[3] < 255) partialConfirmation = result;
+  }
+  check('exercises a non-opaque confirmation after an opaque first read', true, !!partialConfirmation && partialConfirmation.rgba[3] === 255);
+  check('rejects that non-opaque confirmation', undefined, partialConfirmation?.id);
+
+  const border = createTrial(16, 16, [{ id: 'background', shape: rect(0, 0, 16, 16) }]);
+  check('accepts the buffer corner', 'background', border.pick(0, 0));
+  check('rejects positions outside the buffer', undefined, border.pick(-1, 0));
+
+  // A candidate that really is underneath both blending shapes is permitted by
+  // the proposed contract. These allocated colours have such a collision.
+  let ambiguous = null;
+  for (let step = 96; step <= 160 && !ambiguous; step++) {
+    const scene = createTrial(32, 32, collisionEntries(34, 26, 34, 8 + step / 256, true));
+    if (scene.raw(8, 10) === 'shape-11' && scene.pick(8, 10) === 'shape-11') ambiguous = { scene, edge: 8 + step / 256 };
+  }
+  check('demonstrates the accepted underlying-shape ambiguity', true, !!ambiguous);
+  if (ambiguous) scenes.push({ name: 'Accepted overlap-edge ambiguity', scene: ambiguous.scene, point: [8, 10], description: 'Shape 11 really covers this point underneath shapes 26 and 34. Its isolated render passes. This is the agreed overlap ambiguity.' });
+
+  const dense = createTrial(192, 144, seededCircles(300, 192, 144));
+  const transform = new DOMMatrix().translate(15.25, 9.75).rotate(17).scale(0.72, 0.58);
+  const transformed = createTrial(120, 100, seededCircles(80, 120, 100), [transform.a, transform.b, transform.c, transform.d, transform.e, transform.f]);
+  scenes.push({ name: '300 seeded overlapping circles', scene: dense, point: [96, 72], description: 'Filled circles, padded circles, and strokes. Every pixel is checked against independently rendered full-size coverage masks.' });
+  scenes.push({ name: 'Transformed paths', scene: transformed, point: [45, 40], description: 'Translation, rotation, and non-uniform scaling. The isolated draw must use the same buffer pixel grid.' });
+  const scans = { knownCollision: scan(known), denseCircles: scan(dense), transformedPaths: scan(transformed) };
+  for (const [name, result] of Object.entries(scans)) {
+    check(name + ': no returned candidate lacks coverage', 0, result.verifiedCandidate.noCoverage);
+    check(name + ': every returned candidate is fully opaque', 0, result.verifiedCandidate.partialCoverage);
+    check(name + ': preserves opaque topmost interiors', 0, result.verifiedCandidate.missedOpaqueTopmost);
+  }
+  const timing = benchmark(dense);
+  const result = { browser: navigator.userAgent, passed: checks.filter(x => x.pass).length, total: checks.length, checks, edgeSweep: { positions: 257, rawUnrelated: rawWrong, rejected }, partialConfirmation, acceptedAmbiguity: ambiguous ? { edge: ambiguous.edge, sample: ambiguous.scene.verify(8, 10) } : null, scans, timing };
+  document.querySelector('#checks').innerHTML = '<tr><th>Case</th><th>Result</th></tr>' + checks.map(c => '<tr><td>' + c.name + '</td><td class="' + (c.pass ? 'pass' : 'fail') + '">' + (c.pass ? 'Pass' : 'FAIL: ' + JSON.stringify(c)) + '</td></tr>').join('');
+  document.querySelector('#scans').textContent = JSON.stringify(scans, null, 2);
+  document.querySelector('#timing').textContent = JSON.stringify(timing, null, 2);
+  document.querySelector('#results').textContent = JSON.stringify(result);
+  document.querySelector('#status').textContent = result.passed + '/' + result.total + ' checks passed';
+  const unrelated = Object.values(scans).reduce((n, scan) => n + scan.verifiedCandidate.noCoverage, 0);
+  document.querySelector('#verdict').textContent = 'Returned IDs with no reference coverage: ' + unrelated + '. Strict checks failing: ' + checks.filter(c => !c.pass).length + '. See the coverage histograms and scratch-size probes in the full results for near-edge rasterisation differences.';
+  document.querySelector('#scene').innerHTML = scenes.map((s, i) => '<option value="' + i + '">' + s.name + '</option>').join('');
+  showScene();
+}
+
+function showSample(x, y) {
+  const { scene } = scenes[+document.querySelector('#scene').value];
+  document.querySelector('#sample').textContent = JSON.stringify({ pixel: [Math.floor(x), Math.floor(y)], singlePixel: scene.raw(x, y) ?? null, ninePixelAgreement: scene.baseline.pick(x, y) ?? null, verifiedCandidate: scene.verify(x, y) }, null, 2);
+}
+function showScene() {
+  const selected = scenes[+document.querySelector('#scene').value], { scene } = selected;
+  const canvas = document.querySelector('#view');
+  canvas.width = scene.width; canvas.height = scene.height;
+  canvas.getContext('2d').drawImage(scene.buffer.ctx.canvas, 0, 0);
+  document.querySelector('#description').textContent = selected.description;
+  showSample(...selected.point);
+}
+document.querySelector('#run').onclick = run;
+document.querySelector('#scene').onchange = showScene;
+document.querySelector('#probe').onclick = () => showSample(...scenes[+document.querySelector('#scene').value].point);
+document.querySelector('#view').onpointermove = e => {
+  const canvas = e.currentTarget;
+  showSample(e.offsetX * canvas.width / canvas.clientWidth, e.offsetY * canvas.height / canvas.clientHeight);
+};
+run();
+</script>

@@ -1,0 +1,41 @@
+:root {
+  color-scheme: light dark;
+  --bg: #eef0ee; --surface: #fafbfa; --ink: #1b2228; --muted: #63707b;
+  --line: #cfd5d3; --accent: #386b53; --bad: #aa392e;
+  font: 15px/1.55 "IBM Plex Sans", system-ui, sans-serif;
+  color: var(--ink); background: var(--bg);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #14181b; --surface: #1c2125; --ink: #e4e8ea; --muted: #9aa5ad; --line: #394148; --accent: #9bc6a9; --bad: #ff9b8f; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 28px 20px 60px; }
+main { max-width: 1040px; margin: auto; }
+nav { display: flex; flex-wrap: wrap; gap: 22px; margin-bottom: 34px; font-size: 13px; }
+a { color: var(--accent); text-underline-offset: 4px; }
+nav a[aria-current] { color: var(--ink); text-decoration-thickness: 2px; }
+h1 { margin: 0 0 8px; font-size: clamp(25px, 4vw, 34px); font-weight: 550; letter-spacing: -.035em; }
+h2 { margin: 0 0 6px; font-size: 17px; font-weight: 550; }
+p { margin: 0 0 14px; max-width: 72ch; }
+header { margin-bottom: 26px; }
+.muted, .card p { color: var(--muted); font-size: 13px; }
+.controls { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; margin: 20px 0 12px; }
+label { display: inline-flex; gap: 9px; align-items: center; font-size: 13px; }
+button, select, input { font: inherit; accent-color: var(--accent); }
+button, select { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 6px 10px; }
+button { cursor: pointer; }
+button:disabled { cursor: wait; opacity: .6; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 28px; }
+.card { min-width: 0; }
+canvas { display: block; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; touch-action: none; }
+.readout, code, .metric { font: 12px/1.6 "IBM Plex Mono", ui-monospace, monospace; }
+.readout { display: block; min-height: 3.2em; margin: 8px 0 0; white-space: pre-wrap; color: var(--muted); }
+.checks { list-style: none; margin: 26px 0 0; padding: 0; }
+.checks li { padding: 13px 0; border-top: 1px solid var(--line); }
+.check-name { display: flex; justify-content: space-between; gap: 20px; }
+.pass { color: var(--accent); } .fail { color: var(--bad); }
+.metric { color: var(--muted); margin-top: 6px; }
+.stage { max-width: 800px; margin: 22px auto; }
+.timer-controls { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+@media (max-width: 680px) { .grid { grid-template-columns: 1fr; } body { padding-inline: 14px; } }

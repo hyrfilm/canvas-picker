@@ -1,0 +1,940 @@
+{
+  "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+  "passed": 23,
+  "total": 27,
+  "checks": [
+    {
+      "name": "reproduces the unrelated raw ID",
+      "pass": true,
+      "expected": "shape-11",
+      "actual": "shape-11"
+    },
+    {
+      "name": "rejects that unrelated candidate",
+      "pass": true,
+      "expected": null,
+      "actual": null
+    },
+    {
+      "name": "the unrelated candidate draws nothing in isolation",
+      "pass": true,
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "name": "retains the solid topmost interior",
+      "pass": true,
+      "expected": "shape-16",
+      "actual": "shape-16"
+    },
+    {
+      "name": "all unrelated candidates in the 257-position sweep are rejected",
+      "pass": true,
+      "expected": 6,
+      "actual": 6
+    },
+    {
+      "name": "the sweep exercises at least one collision",
+      "pass": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "accepts an opaque one-pixel-wide target",
+      "pass": true,
+      "expected": "thin-line",
+      "actual": "thin-line"
+    },
+    {
+      "name": "the current 3×3 rule rejects that target",
+      "pass": true,
+      "expected": null,
+      "actual": null
+    },
+    {
+      "name": "accepts an opaque one-pixel dot",
+      "pass": true,
+      "expected": "tiny-dot",
+      "actual": "tiny-dot"
+    },
+    {
+      "name": "fractional queries use the same pixel grid",
+      "pass": true,
+      "expected": "tiny-dot",
+      "actual": "tiny-dot"
+    },
+    {
+      "name": "the first-alpha fixture is partially transparent",
+      "pass": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "rejects a non-opaque first read",
+      "pass": true,
+      "expected": null,
+      "actual": null
+    },
+    {
+      "name": "skips verification when the first read is non-opaque",
+      "pass": true,
+      "expected": null,
+      "actual": null
+    },
+    {
+      "name": "exercises a non-opaque confirmation after an opaque first read",
+      "pass": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "rejects that non-opaque confirmation",
+      "pass": true,
+      "expected": null,
+      "actual": null
+    },
+    {
+      "name": "accepts the buffer corner",
+      "pass": true,
+      "expected": "background",
+      "actual": "background"
+    },
+    {
+      "name": "rejects positions outside the buffer",
+      "pass": true,
+      "expected": null,
+      "actual": null
+    },
+    {
+      "name": "demonstrates the accepted underlying-shape ambiguity",
+      "pass": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "knownCollision: no returned candidate lacks coverage",
+      "pass": true,
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "name": "knownCollision: every returned candidate is fully opaque",
+      "pass": true,
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "name": "knownCollision: preserves opaque topmost interiors",
+      "pass": true,
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "name": "denseCircles: no returned candidate lacks coverage",
+      "pass": true,
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "name": "denseCircles: every returned candidate is fully opaque",
+      "pass": false,
+      "expected": 0,
+      "actual": 131
+    },
+    {
+      "name": "denseCircles: preserves opaque topmost interiors",
+      "pass": false,
+      "expected": 0,
+      "actual": 64
+    },
+    {
+      "name": "transformedPaths: no returned candidate lacks coverage",
+      "pass": true,
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "name": "transformedPaths: every returned candidate is fully opaque",
+      "pass": false,
+      "expected": 0,
+      "actual": 33
+    },
+    {
+      "name": "transformedPaths: preserves opaque topmost interiors",
+      "pass": false,
+      "expected": 0,
+      "actual": 14
+    }
+  ],
+  "edgeSweep": {
+    "positions": 257,
+    "rawUnrelated": 6,
+    "rejected": 6
+  },
+  "partialConfirmation": {
+    "candidate": "shape-2",
+    "rgba": [
+      190,
+      54,
+      138,
+      255
+    ],
+    "confirmation": [
+      190,
+      53,
+      138,
+      254
+    ]
+  },
+  "acceptedAmbiguity": {
+    "edge": 8.4375,
+    "sample": {
+      "id": "shape-11",
+      "candidate": "shape-11",
+      "rgba": [
+        143,
+        169,
+        108,
+        255
+      ],
+      "confirmation": [
+        142,
+        170,
+        110,
+        255
+      ]
+    }
+  },
+  "scans": {
+    "knownCollision": {
+      "pixels": 1024,
+      "shapes": 16,
+      "singlePixel": {
+        "hits": 404,
+        "noCoverage": 20,
+        "partialCoverage": 0,
+        "overlapEdgeAmbiguities": 0,
+        "missedOpaqueTopmost": 0
+      },
+      "ninePixelAgreement": {
+        "hits": 270,
+        "noCoverage": 0,
+        "partialCoverage": 0,
+        "overlapEdgeAmbiguities": 0,
+        "missedOpaqueTopmost": 114
+      },
+      "verifiedCandidate": {
+        "hits": 384,
+        "noCoverage": 0,
+        "partialCoverage": 0,
+        "overlapEdgeAmbiguities": 0,
+        "missedOpaqueTopmost": 0
+      },
+      "coverageHistogram": {},
+      "rejectedAlphaHistogram": {},
+      "coverageDifferences": [],
+      "missedInteriors": []
+    },
+    "denseCircles": {
+      "pixels": 27648,
+      "shapes": 300,
+      "singlePixel": {
+        "hits": 21668,
+        "noCoverage": 10,
+        "partialCoverage": 192,
+        "overlapEdgeAmbiguities": 196,
+        "missedOpaqueTopmost": 0
+      },
+      "ninePixelAgreement": {
+        "hits": 13158,
+        "noCoverage": 0,
+        "partialCoverage": 0,
+        "overlapEdgeAmbiguities": 0,
+        "missedOpaqueTopmost": 8112
+      },
+      "verifiedCandidate": {
+        "hits": 21533,
+        "noCoverage": 0,
+        "partialCoverage": 131,
+        "overlapEdgeAmbiguities": 196,
+        "missedOpaqueTopmost": 64
+      },
+      "coverageHistogram": {
+        "242": 1,
+        "245": 1,
+        "248": 2,
+        "249": 2,
+        "250": 7,
+        "251": 12,
+        "252": 18,
+        "253": 43,
+        "254": 45
+      },
+      "rejectedAlphaHistogram": {
+        "208": 1,
+        "215": 1,
+        "216": 1,
+        "232": 2,
+        "233": 1,
+        "235": 1,
+        "237": 1,
+        "238": 1,
+        "242": 2,
+        "243": 2,
+        "244": 3,
+        "245": 2,
+        "246": 4,
+        "247": 7,
+        "248": 7,
+        "249": 3,
+        "250": 7,
+        "251": 3,
+        "252": 8,
+        "253": 5,
+        "254": 2
+      },
+      "coverageDifferences": [
+        {
+          "pixel": [
+            15,
+            1
+          ],
+          "id": "circle-146",
+          "referenceAlpha": 253,
+          "probes": {
+            "1×1": [
+              218,
+              110,
+              202,
+              255
+            ],
+            "3×3": [
+              218,
+              110,
+              202,
+              255
+            ],
+            "5×5": [
+              218,
+              109,
+              201,
+              252
+            ],
+            "9×9": [
+              218,
+              110,
+              202,
+              253
+            ],
+            "33×33": [
+              218,
+              110,
+              202,
+              253
+            ],
+            "fullSize": [
+              218,
+              110,
+              202,
+              253
+            ]
+          }
+        },
+        {
+          "pixel": [
+            61,
+            4
+          ],
+          "id": "circle-194",
+          "referenceAlpha": 253,
+          "probes": {
+            "1×1": [
+              142,
+              130,
+              138,
+              255
+            ],
+            "3×3": [
+              142,
+              130,
+              138,
+              254
+            ],
+            "5×5": [
+              142,
+              130,
+              138,
+              252
+            ],
+            "9×9": [
+              141,
+              129,
+              137,
+              253
+            ],
+            "33×33": [
+              141,
+              129,
+              137,
+              253
+            ],
+            "fullSize": [
+              141,
+              129,
+              137,
+              253
+            ]
+          }
+        },
+        {
+          "pixel": [
+            146,
+            4
+          ],
+          "id": "circle-268",
+          "referenceAlpha": 254,
+          "probes": {
+            "1×1": [
+              218,
+              86,
+              50,
+              255
+            ],
+            "3×3": [
+              218,
+              86,
+              50,
+              255
+            ],
+            "5×5": [
+              218,
+              86,
+              50,
+              255
+            ],
+            "9×9": [
+              218,
+              86,
+              50,
+              255
+            ],
+            "33×33": [
+              218,
+              85,
+              49,
+              254
+            ],
+            "fullSize": [
+              218,
+              85,
+              49,
+              254
+            ]
+          }
+        }
+      ],
+      "missedInteriors": [
+        {
+          "pixel": [
+            174,
+            5
+          ],
+          "expected": "circle-235",
+          "actual": null,
+          "probes": {
+            "1×1": [
+              46,
+              85,
+              238,
+              252
+            ],
+            "3×3": [
+              46,
+              85,
+              238,
+              252
+            ],
+            "5×5": [
+              46,
+              86,
+              238,
+              250
+            ],
+            "9×9": [
+              46,
+              86,
+              238,
+              255
+            ],
+            "33×33": [
+              46,
+              86,
+              238,
+              255
+            ],
+            "fullSize": [
+              46,
+              86,
+              238,
+              255
+            ]
+          }
+        },
+        {
+          "pixel": [
+            14,
+            7
+          ],
+          "expected": "circle-146",
+          "actual": null,
+          "probes": {
+            "1×1": [
+              218,
+              109,
+              202,
+              248
+            ],
+            "3×3": [
+              218,
+              110,
+              202,
+              255
+            ],
+            "5×5": [
+              218,
+              110,
+              202,
+              255
+            ],
+            "9×9": [
+              218,
+              110,
+              202,
+              255
+            ],
+            "33×33": [
+              218,
+              110,
+              202,
+              255
+            ],
+            "fullSize": [
+              218,
+              110,
+              202,
+              255
+            ]
+          }
+        },
+        {
+          "pixel": [
+            52,
+            8
+          ],
+          "expected": "circle-231",
+          "actual": null,
+          "probes": {
+            "1×1": [
+              177,
+              233,
+              221,
+              233
+            ],
+            "3×3": [
+              177,
+              234,
+              222,
+              194
+            ],
+            "5×5": [
+              178,
+              234,
+              221,
+              195
+            ],
+            "9×9": [
+              178,
+              234,
+              222,
+              202
+            ],
+            "33×33": [
+              178,
+              234,
+              222,
+              255
+            ],
+            "fullSize": [
+              178,
+              234,
+              222,
+              255
+            ]
+          }
+        }
+      ]
+    },
+    "transformedPaths": {
+      "pixels": 12000,
+      "shapes": 80,
+      "singlePixel": {
+        "hits": 3791,
+        "noCoverage": 2,
+        "partialCoverage": 43,
+        "overlapEdgeAmbiguities": 33,
+        "missedOpaqueTopmost": 0
+      },
+      "ninePixelAgreement": {
+        "hits": 2041,
+        "noCoverage": 0,
+        "partialCoverage": 0,
+        "overlapEdgeAmbiguities": 0,
+        "missedOpaqueTopmost": 1672
+      },
+      "verifiedCandidate": {
+        "hits": 3765,
+        "noCoverage": 0,
+        "partialCoverage": 33,
+        "overlapEdgeAmbiguities": 33,
+        "missedOpaqueTopmost": 14
+      },
+      "coverageHistogram": {
+        "249": 1,
+        "250": 1,
+        "251": 4,
+        "252": 4,
+        "253": 10,
+        "254": 13
+      },
+      "rejectedAlphaHistogram": {
+        "210": 1,
+        "232": 1,
+        "238": 1,
+        "240": 1,
+        "246": 3,
+        "247": 1,
+        "248": 2,
+        "249": 1,
+        "252": 3
+      },
+      "coverageDifferences": [
+        {
+          "pixel": [
+            38,
+            21
+          ],
+          "id": "circle-67",
+          "referenceAlpha": 254,
+          "probes": {
+            "1×1": [
+              54,
+              150,
+              78,
+              255
+            ],
+            "3×3": [
+              54,
+              150,
+              78,
+              252
+            ],
+            "5×5": [
+              53,
+              150,
+              77,
+              254
+            ],
+            "9×9": [
+              53,
+              150,
+              77,
+              254
+            ],
+            "33×33": [
+              53,
+              150,
+              77,
+              254
+            ],
+            "fullSize": [
+              53,
+              150,
+              77,
+              254
+            ]
+          }
+        },
+        {
+          "pixel": [
+            25,
+            25
+          ],
+          "id": "circle-76",
+          "referenceAlpha": 253,
+          "probes": {
+            "1×1": [
+              10,
+              10,
+              50,
+              255
+            ],
+            "3×3": [
+              10,
+              10,
+              50,
+              255
+            ],
+            "5×5": [
+              9,
+              9,
+              49,
+              253
+            ],
+            "9×9": [
+              9,
+              9,
+              49,
+              253
+            ],
+            "33×33": [
+              9,
+              9,
+              49,
+              253
+            ],
+            "fullSize": [
+              9,
+              9,
+              49,
+              253
+            ]
+          }
+        },
+        {
+          "pixel": [
+            69,
+            30
+          ],
+          "id": "circle-60",
+          "referenceAlpha": 253,
+          "probes": {
+            "1×1": [
+              34,
+              86,
+              242,
+              255
+            ],
+            "3×3": [
+              34,
+              86,
+              242,
+              255
+            ],
+            "5×5": [
+              33,
+              86,
+              242,
+              253
+            ],
+            "9×9": [
+              33,
+              86,
+              242,
+              253
+            ],
+            "33×33": [
+              33,
+              86,
+              242,
+              253
+            ],
+            "fullSize": [
+              33,
+              86,
+              242,
+              253
+            ]
+          }
+        }
+      ],
+      "missedInteriors": [
+        {
+          "pixel": [
+            52,
+            31
+          ],
+          "expected": "circle-61",
+          "actual": null,
+          "probes": {
+            "1×1": [
+              254,
+              242,
+              182,
+              248
+            ],
+            "3×3": [
+              254,
+              242,
+              182,
+              255
+            ],
+            "5×5": [
+              254,
+              242,
+              182,
+              227
+            ],
+            "9×9": [
+              254,
+              242,
+              182,
+              255
+            ],
+            "33×33": [
+              254,
+              242,
+              182,
+              255
+            ],
+            "fullSize": [
+              254,
+              242,
+              182,
+              255
+            ]
+          }
+        },
+        {
+          "pixel": [
+            57,
+            33
+          ],
+          "expected": "circle-66",
+          "actual": null,
+          "probes": {
+            "1×1": [
+              85,
+              250,
+              137,
+              240
+            ],
+            "3×3": [
+              86,
+              250,
+              137,
+              253
+            ],
+            "5×5": [
+              85,
+              250,
+              138,
+              254
+            ],
+            "9×9": [
+              86,
+              250,
+              138,
+              255
+            ],
+            "33×33": [
+              86,
+              250,
+              138,
+              255
+            ],
+            "fullSize": [
+              86,
+              250,
+              138,
+              255
+            ]
+          }
+        },
+        {
+          "pixel": [
+            86,
+            35
+          ],
+          "expected": "circle-52",
+          "actual": null,
+          "probes": {
+            "1×1": [
+              45,
+              125,
+              210,
+              248
+            ],
+            "3×3": [
+              46,
+              125,
+              209,
+              246
+            ],
+            "5×5": [
+              45,
+              125,
+              210,
+              248
+            ],
+            "9×9": [
+              46,
+              126,
+              210,
+              255
+            ],
+            "33×33": [
+              46,
+              126,
+              210,
+              255
+            ],
+            "fullSize": [
+              46,
+              126,
+              210,
+              255
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "timing": {
+    "queriesPerBatch": 3000,
+    "batches": 5,
+    "units": "microseconds/pick",
+    "methods": {
+      "singlePixel": {
+        "median": 0.57,
+        "samples": [
+          0.53,
+          0.53,
+          0.57,
+          0.6,
+          0.63
+        ]
+      },
+      "ninePixelAgreement": {
+        "median": 0.57,
+        "samples": [
+          0.53,
+          0.57,
+          0.57,
+          0.57,
+          0.63
+        ]
+      },
+      "verifiedCandidate": {
+        "median": 3.2,
+        "samples": [
+          3.17,
+          3.2,
+          3.2,
+          3.27,
+          8.23
+        ]
+      }
+    },
+    "hits": 30095
+  }
+}

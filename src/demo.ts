@@ -355,8 +355,6 @@ function hilmaPanel() {
     ctx.font = '8px "IBM Plex Mono", monospace'
     ctx.fillStyle = c.muted
     ctx.fillText('HILMA', CX, CY - 4)
-    ctx.fillText('FIELD AXIS', CX, CY + 12)
-    ctx.fillText('AXIS', CX, axisOuter.y - 14)
 
     // Routes
     ctx.strokeStyle = c.lilac

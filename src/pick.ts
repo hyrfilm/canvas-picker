@@ -3,8 +3,8 @@
 //   createIdPicker  - string ids on top, redraws lazily when something changed
 //   trackPointer    - turns pointer events into enter/leave/down/up/click per id
 
-// A shape does geometry only (path, fill(), stroke(), lineWidth).
-// It must not set fillStyle or strokeStyle.
+// A shape supplies its geometry and any stroke/text settings it needs.
+// The picker supplies colour and opacity; shapes draw relative to its transform.
 export type Shape = (
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
 ) => void
@@ -21,6 +21,7 @@ function channel(bits: number) {
 export function createPicker(width: number, height: number) {
   const canvas = new OffscreenCanvas(width, height)
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!
+  const probe = new OffscreenCanvas(1, 1).getContext('2d', { willReadFrequently: true })!
 
   return {
     // Set the same transform here as on the visible canvas.
@@ -35,16 +36,24 @@ export function createPicker(width: number, height: number) {
 
     // index is an integer, 1..0x3ffff
     draw(index: number, shape: Shape) {
-      const r = channel(index >> 12)
-      const g = channel(index >> 6)
-      const b = channel(index)
-      ctx.fillStyle = ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`
-      shape(ctx)
+      ctx.save()
+      ctx.beginPath()
+      try {
+        const r = channel(index >> 12)
+        const g = channel(index >> 6)
+        const b = channel(index)
+        ctx.fillStyle = ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`
+        shape(ctx)
+      } finally {
+        ctx.restore()
+      }
     },
 
-    // All nine pixels must be opaque and decode to the same index.
-    // This rejects isolated false matches and narrow bands of blended colours.
-    pick(x: number, y: number) {
+    // Returns the index drawn at x,y, or 0 for background and antialiased edges.
+    // neighbours is how many of the eight surrounding pixels must hold the same
+    // index: 0 trusts the pixel alone, 8 needs all of them. Agreement reduces
+    // false matches from blended edges; it does not eliminate them.
+    pick(x: number, y: number, neighbours = 2) {
       const { data } = ctx.getImageData(Math.floor(x) - 1, Math.floor(y) - 1, 3, 3)
       const index = (i: number) =>
         data[i * 4 + 3] === 255
@@ -52,15 +61,39 @@ export function createPicker(width: number, height: number) {
           : 0
 
       const centre = index(4)
-      for (let i = 0; i < 9; i++) {
-        if (index(i) !== centre) return 0
+      let same = 0
+      for (let i = 0; i < 9; i++) if (index(i) === centre) same++
+      return same > neighbours ? centre : 0
+    },
+
+    // How much of the pixel at x,y the shape covers when drawn on its own,
+    // from 0 (none) to 255 (all of it).
+    coverage(shape: Shape, x: number, y: number) {
+      probe.save()
+      probe.beginPath()
+      try {
+        probe.resetTransform()
+        probe.clearRect(0, 0, 1, 1)
+        probe.setTransform(
+          new DOMMatrix().translate(-Math.floor(x), -Math.floor(y)).multiply(ctx.getTransform()),
+        )
+        shape(probe)
+        return probe.getImageData(0, 0, 1, 1).data[3]
+      } finally {
+        probe.restore()
       }
-      return centre
     },
   }
 }
 
-export function createIdPicker(picker: Picker) {
+// verify: after reading the pixel, draw that one shape on its own and accept
+// it only if it covers at least half of the pixel. This rejects candidates
+// whose geometry is elsewhere, while keeping thin shapes.
+// neighbours: see Picker.pick. Not needed when verify is on.
+export function createIdPicker(
+  picker: Picker,
+  { verify = true, neighbours = verify ? 0 : 2 }: { verify?: boolean; neighbours?: number } = {},
+) {
   const shapes = new Map<string, Shape>()
   const ids = new Map<number, string>()
   let dirty = false
@@ -81,6 +114,7 @@ export function createIdPicker(picker: Picker) {
   return {
     // Later ids are drawn on top of earlier ones.
     set(id: string, shape: Shape) {
+      if (!id.trim()) throw new Error('Pick IDs cannot be empty or whitespace-only.')
       shapes.set(id, shape)
       dirty = true
     },
@@ -102,7 +136,9 @@ export function createIdPicker(picker: Picker) {
 
     pick(x: number, y: number) {
       if (dirty) redraw()
-      return ids.get(picker.pick(x, y))
+      const id = ids.get(picker.pick(x, y, neighbours))
+      if (id === undefined || !verify) return id
+      return picker.coverage(shapes.get(id)!, x, y) >= 128 ? id : undefined
     },
   }
 }
@@ -113,13 +149,15 @@ export type PointerEventType = 'enter' | 'leave' | 'down' | 'up' | 'click'
 // carries the id under the pointer or undefined, and moving from a shape onto
 // nothing emits leave for the shape, then enter with undefined. The pointer is
 // captured on down, so up still arrives when the pointer is released outside
-// the element.
+// the element. The returned function removes the listeners.
 export function trackPointer(
   el: HTMLElement,
   pick: (x: number, y: number) => string | undefined,
   emit: (type: PointerEventType, id: string | undefined, e: MouseEvent) => void,
 ) {
   let hovered: string | undefined
+  const listeners = new AbortController()
+  const options = { signal: listeners.signal }
 
   function hover(id: string | undefined, e: MouseEvent) {
     if (id === hovered) return
@@ -128,12 +166,14 @@ export function trackPointer(
     hovered = id
   }
 
-  el.addEventListener('pointermove', (e) => hover(pick(e.offsetX, e.offsetY), e))
-  el.addEventListener('pointerleave', (e) => hover(undefined, e))
+  el.addEventListener('pointermove', (e) => hover(pick(e.offsetX, e.offsetY), e), options)
+  el.addEventListener('pointerleave', (e) => hover(undefined, e), options)
   el.addEventListener('pointerdown', (e) => {
     el.setPointerCapture(e.pointerId)
     emit('down', pick(e.offsetX, e.offsetY), e)
-  })
-  el.addEventListener('pointerup', (e) => emit('up', pick(e.offsetX, e.offsetY), e))
-  el.addEventListener('click', (e) => emit('click', pick(e.offsetX, e.offsetY), e))
+  }, options)
+  el.addEventListener('pointerup', (e) => emit('up', pick(e.offsetX, e.offsetY), e), options)
+  el.addEventListener('click', (e) => emit('click', pick(e.offsetX, e.offsetY), e), options)
+
+  return () => listeners.abort()
 }

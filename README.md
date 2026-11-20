@@ -1,68 +1,72 @@
 # canvas-picker
 
-Give things on a canvas an ID, then find out what you're pointing at.
-Useful for knobs, points, cables, or whatever else you're drawing.
-
-The trick is a hidden canvas: each thing gets its own colour, and the pixel
-under the pointer tells us which thing is there. No separate hit-testing
-formula for every shape.
-
-Start with [examples/basic.ts](examples/basic.ts) for a small, runnable example
-of each layer: numeric indices, string IDs, then pointer events.
-
-```ts
-import { createPicker, createIdPicker, trackPointer } from './pick'
-import { filled, stroked } from './shapes'
-
-const ids = createIdPicker(createPicker(400, 300))
-ids.set('knob', filled(knobPath, 4))
-ids.set('cable', stroked(cablePath, 12))
-
-trackPointer(canvas, ids.pick, (type, id, event) => {
-  if (type === 'click' && id) select(id)
-})
-```
-
-`filled` and `stroked` take `Path2D` paths. Making the pick shape a little
-bigger than the visible shape makes small things easier to grab.
-A custom shape is just `(ctx) => { /* draw your geometry */ }`. Set any
-stroke or text settings it needs, leave colours and opacity to the picker,
-and draw relative to the current transform.
-
-Use `set`, `delete`, and `clear` to update the pickable things.
-`invalidate()` is for geometry that changed inside an existing shape.
-The buffer redraws on the next pick. IDs cannot be blank; empty space
-returns `undefined`.
-
-Pointer events are `enter`, `leave`, `down`, `up`, and `click`.
-`trackPointer` returns a function that removes its listeners.
-The optional `trackDrag` helper in `drag.ts` adds `start`, `move`, `end`,
-and `cancel`, with the starting ID and movement in element pixels.
-Your app decides what moves and what accepts a drop. Its returned function
-removes the drag listeners.
-
-The buffer has its own coordinates. If your displayed canvas has a different
-size, scale the pointer coordinates before calling `pick`. The demos show how.
-
-By default, we double-check that the shape found in the buffer really is
-under the pointer. At overlapping edges you might get another overlapping
-shape, or no hit. There are also `{ verify, neighbours }` options on
-`createIdPicker`. Neighbour filtering can reduce false matches, but can miss
-small shapes too. Try the playground to see the difference.
-
-## Try it
+Give shapes on a 2D canvas a target and find out which one the pointer hit. Register the same paths you draw, or give small handles a wider hit area. A hidden colour buffer handles overlapping shapes.
 
 ```sh
-npm install
-npm run dev
+npm install canvas-picker
 ```
 
-- `/`: cables and an envelope editor.
-- `/examples/basic.html`: the three basic examples above (dev server).
-- `/playground.html`: SVG triangles, moving circles, polygons you can draw and drag, and picking settings.
-- `/checks.html`: the actual browser checks, including overlapping-path scans.
+```ts
+import { createPicker } from 'canvas-picker'
 
-`npm test` runs the checks and pointer/drag interactions in Chrome.
-`npm run test:coverage` reports library coverage and writes a browsable report
-to `coverage/index.html`.
-`npm run build` includes all three pages for `npm run preview`.
+const knob = { x: 60, y: 80 }
+const picker = createPicker<typeof knob>(canvas, { width: 400, height: 300 })
+const origin = { ...knob }
+
+picker.set(knob, ctx => {
+  ctx.arc(knob.x, knob.y, 12, 0, Math.PI * 2)
+  ctx.fill()
+})
+
+picker.on(knob, 'dragstart', () => Object.assign(origin, knob))
+picker.on(knob, 'drag', e => {
+  knob.x = origin.x + e.dx
+  knob.y = origin.y + e.dy
+  picker.invalidate()
+  draw() // Your visible canvas reads knob.x and knob.y.
+})
+const off = picker.on(knob, 'click', () => select(knob))
+// Call off() to remove this click handler.
+```
+
+## Shapes and coordinates
+
+`createPicker(canvas)` takes its initial buffer size from the canvas attributes. Pass `{ width, height }` to choose a fixed logical resolution. To use picking without DOM input, call `createPicker({ width, height })`. This library uses browser Canvas 2D, `OffscreenCanvas`, and `DOMMatrix`.
+
+TypeScript defaults to string IDs. Use `createPicker<Knob>(canvas)` for model objects. Keys follow JavaScript Map equality. Reuse the same object instance across renders, or use a stable primitive ID. Empty space returns `undefined`.
+
+- `set(target, shape)` registers geometry. Later registrations draw on top. Updating a target keeps its position. Deleting it and adding it again puts it on top.
+- `filled(path, margin?)` and `stroked(path, width)` create pick shapes from a `Path2D`. A custom shape receives a context with colour and opacity already set.
+- `pick(x, y)` accepts coordinates in the space where shapes draw. `setTransform(matrix)` sets the invertible 2D transform from that space to buffer pixels. Pointer positions and drag deltas use shape units.
+- `invalidate()` marks geometry stale after a model changes. The next pick or `drawBuffer(ctx)` redraws it. `drawBuffer` paints the current pick buffer at the destination context’s origin, respecting its transform.
+- `resize(width, height)` changes the pick buffer resolution and retains the transform and registrations. CSS resizing alone is handled by the pointer mapping.
+- The default mapping handles borders, padding and axis-aligned positive CSS scaling with the canvas bitmap filling its content box. Supply `mapPoint(event)` returning `{ x, y }` in shape coordinates for custom layouts such as a CSS-rotated canvas.
+
+## Events
+
+Use `picker.on(target, type, handler)` for a widget, `picker.on(type, handler)` across the canvas, or `picker.track(handler)` to send the entire event stream to a state machine. Each returns an unsubscribe function. They share one gesture tracker. Deleting a target removes its scoped handlers, and `clear()` removes all targets and their scoped handlers.
+
+| Event | Target and position |
+| --- | --- |
+| `enter`, `leave` | The target entered or left, including empty space. |
+| `move`, `down`, `up`, `click` | The hit at the current position. Use `up` to find the destination of a drop. |
+| `dragstart`, `drag`, `dragend`, `dragcancel` | The target pressed initially. `startX` and `startY` give the press position. `dx` and `dy` are cumulative from that position. |
+
+Every event includes `x`, `y`, and the underlying DOM pointer event in `event`. A primary-button drag starts after five CSS pixels of movement by default. Set `dragThreshold` to tune it. A completed drag suppresses the picker's ensuing click. Drag callbacks run before hover picking on a move so updated geometry participates immediately. Use `touch-action: none` on a draggable canvas to reserve touch gestures for the widget. Pointer cancellation, lost capture, and window blur cancel an active drag.
+
+## Lower-level picking
+
+Import `createIndexPicker(width, height)` from `canvas-picker/index-buffer` for direct numeric-index drawing and pixel reads. The high-level picker verifies by default that the candidate shape covers at least half the sampled pixel. At antialiased overlaps a pick can return another overlapping shape or empty space. The playground demonstrates the `verify` and `neighbours` options.
+
+## Run the examples
+
+Run `npm ci` and `npm run dev` in the repository.
+
+| Page | Example |
+| --- | --- |
+| `/` | Patch cables between ports and edit an envelope. |
+| `/examples/basic.html` | Read an index, pick a named shape, and attach a target handler. |
+| `/playground.html` | Draw and drag polygons, pick moving shapes, and inspect the colour buffer. |
+| `/checks.html` | Exercise the hit-testing algorithm in the browser. |
+
+`npm test` runs Chromium tests. Set `CHROME_BIN` to use a local Chromium executable. `npm run build` builds the demo site. `npm pack` compiles the ESM library and TypeScript declarations and creates the installable package.

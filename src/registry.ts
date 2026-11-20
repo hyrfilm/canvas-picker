@@ -17,16 +17,22 @@ export function createRegistry<T>(
   const ids = new Map<number, T>()
   let dirty = false
 
-  function redraw() {
+  let omitted: T | undefined
+  function redraw(ignore?: T) {
+    if (ignore !== undefined && !shapes.has(ignore)) ignore = undefined
+    if (!dirty && (omitted === ignore || Object.is(omitted, ignore))) return
+    dirty = true
     picker.clear()
     ids.clear()
     let n = 1
     for (const [id, shape] of shapes) {
       // Scrambled so that a blend of two colours is unlikely to be a valid one.
       const index = Math.imul(n++, 0x9e3779b1) & 0x3ffff
+      if (ignore === id || Object.is(ignore, id)) continue
       ids.set(index, id)
       picker.draw(index, shape)
     }
+    omitted = ignore
     dirty = false
   }
 
@@ -39,6 +45,14 @@ export function createRegistry<T>(
       dirty = true
     },
 
+    raise(id: T) {
+      const shape = shapes.get(id)
+      if (!shape) return
+      shapes.delete(id)
+      shapes.set(id, shape)
+      dirty = true
+    },
+
     delete(id: T) {
       shapes.delete(id)
       dirty = true
@@ -46,6 +60,8 @@ export function createRegistry<T>(
 
     clear() {
       shapes.clear()
+      ids.clear()
+      omitted = undefined
       dirty = true
     },
 
@@ -55,12 +71,12 @@ export function createRegistry<T>(
     },
 
     drawBuffer(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D) {
-      if (dirty) redraw()
+      redraw()
       ctx.drawImage(picker.ctx.canvas, 0, 0)
     },
 
-    pick(x: number, y: number) {
-      if (dirty) redraw()
+    pick(x: number, y: number, ignore?: T) {
+      redraw(ignore)
       const id = ids.get(picker.pick(x, y, neighbours))
       if (id === undefined || !verify) return id
       return picker.coverage(shapes.get(id)!, x, y) >= 128 ? id : undefined

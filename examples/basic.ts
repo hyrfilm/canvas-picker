@@ -72,15 +72,14 @@ function drawShapes(canvas: HTMLCanvasElement) {
   ids.set('rectangle', filled(rectangle))
   ids.set('circle', filled(circle))
 
-  const stop = ids.track(e => {
+  ids.track(e => {
     if (e.type !== 'move') output.textContent = `${e.type}: ${e.target ?? 'empty space'}`
   })
-  const off = ids.on('circle', 'click', () => { output.textContent = 'Circle clicked.' })
+  ids.on('circle', 'click', () => { output.textContent = 'Circle clicked.' })
 
   const button = document.querySelector<HTMLButtonElement>('#stop-events')!
   button.addEventListener('click', () => {
-    stop()
-    off()
+    ids.dispose()
     button.disabled = true
     output.textContent = 'Tracking stopped.'
   })

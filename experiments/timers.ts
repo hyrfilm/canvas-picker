@@ -56,7 +56,7 @@ function send(command: StepEvent) {
   events.dispatchEvent(new CustomEvent('step', { detail: command }))
 }
 
-const ids = createPicker(canvas, { width, height })
+const ids = createPicker(canvas, { width, height, canDrag: id => id === 'phase' })
 let current = timers[0], currentIds = current.stepIds.slice(0, current.count)
 let geometry = timerPaths(currentIds)
 let playing = true, scrubbing = false, phaseAtStart = 0, pointerCursor = 'default'

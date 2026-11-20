@@ -32,11 +32,12 @@ export function canvasPoint(canvas: HTMLCanvasElement, event: PointerEvent, widt
 }
 
 export function listen<T>(canvas: HTMLCanvasElement, point: (e: PointerEvent) => Point,
-  pick: (x: number, y: number) => T | undefined, emit: Handler<T>, threshold: number) {
+  pick: (x: number, y: number) => T | undefined, emit: Handler<T>, threshold: number,
+  canDrag?: (target: T, event: PointerEvent) => boolean) {
   const controller = new AbortController()
   const options = { signal: controller.signal }
   let hover: { target: T | undefined } | undefined
-  let gesture: { target: T | undefined; down: PointerEvent; start: Point; last: Point; event: PointerEvent; dragging: boolean } | undefined
+  let gesture: { target: T | undefined; down: PointerEvent; start: Point; last: Point; event: PointerEvent; draggable: boolean; dragging: boolean } | undefined
   let suppressClick: number | undefined
 
   function leave(event: PointerEvent, p: Point) {
@@ -51,13 +52,13 @@ export function listen<T>(canvas: HTMLCanvasElement, point: (e: PointerEvent) =>
       dx: p.x - active.start.x, dy: p.y - active.start.y })
   }
 
-  function finish(event: PointerEvent, cancel: boolean) {
+  function finish(event: PointerEvent, cancel: boolean, position?: Point) {
     const active = gesture
     if (!active || event.pointerId !== active.down.pointerId) return
     gesture = undefined
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
     if (active.dragging || cancel) suppressClick = event.pointerId
-    if (active.dragging) drag(cancel ? 'dragcancel' : 'dragend', active, event, cancel ? active.last : point(event))
+    if (active.dragging) drag(cancel ? 'dragcancel' : 'dragend', active, event, position ?? active.last)
   }
 
   canvas.addEventListener('pointerdown', event => {
@@ -65,7 +66,9 @@ export function listen<T>(canvas: HTMLCanvasElement, point: (e: PointerEvent) =>
     suppressClick = undefined
     const p = point(event)
     const target = pick(p.x, p.y)
-    gesture = { target, down: event, start: p, last: p, event, dragging: false }
+    const draggable = target !== undefined && (canDrag?.(target, event) ?? true)
+    if (controller.signal.aborted) return
+    gesture = { target, draggable, down: event, start: p, last: p, event, dragging: false }
     canvas.setPointerCapture(event.pointerId)
     emit({ type: 'down', target, event, ...p })
   }, options)
@@ -73,10 +76,13 @@ export function listen<T>(canvas: HTMLCanvasElement, point: (e: PointerEvent) =>
     if (!event.isPrimary || (gesture && gesture.down.pointerId !== event.pointerId)) return
     const p = point(event)
     const active = gesture
-    if (active) {
+    if (active && !(event.buttons & 1)) {
+      // With another button held, the primary release arrives as pointermove.
+      release(event, p)
+    } else if (active) {
       active.last = p
       active.event = event
-      if (active.target !== undefined && !active.dragging && Math.hypot(event.clientX - active.down.clientX, event.clientY - active.down.clientY) >= threshold) {
+      if (active.draggable && !active.dragging && Math.hypot(event.clientX - active.down.clientX, event.clientY - active.down.clientY) >= threshold) {
         active.dragging = true
         drag('dragstart', active, event, p)
       }
@@ -93,11 +99,14 @@ export function listen<T>(canvas: HTMLCanvasElement, point: (e: PointerEvent) =>
     emit({ type: 'move', target, event, ...p })
   }, options)
   canvas.addEventListener('pointerleave', event => { if (event.isPrimary) leave(event, point(event)) }, options)
-  canvas.addEventListener('pointerup', event => {
-    if (!event.isPrimary || event.button !== 0) return
-    const p = point(event)
-    finish(event, false)
+  function release(event: PointerEvent, p: Point) {
+    finish(event, false, p)
     emit({ type: 'up', target: pick(p.x, p.y), event, ...p })
+  }
+  canvas.addEventListener('pointerup', event => {
+    if (event.isPrimary && (event.button === 0 || gesture?.down.pointerId === event.pointerId)) {
+      release(event, point(event))
+    }
   }, options)
   canvas.addEventListener('click', event => {
     if (event.detail && suppressClick !== undefined && event.pointerId === suppressClick) return

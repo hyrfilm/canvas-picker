@@ -11,7 +11,7 @@ export default defineConfig({
     include: ['test/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      include: ['src/pick.ts', 'src/shapes.ts', 'src/drag.ts', 'src/index.ts', 'src/index-buffer.ts', 'src/interaction.ts', 'src/registry.ts'],
+      include: ['src/shapes.ts', 'src/index.ts', 'src/index-buffer.ts', 'src/interaction.ts', 'src/registry.ts'],
       reporter: ['text', 'html'],
     },
     browser: {

@@ -66,7 +66,8 @@ function hilmaPanel() {
   type Route = { kind: 'route'; id: string; from: Port; to: Port; path: Path2D }
   type Control = { kind: 'patch' | 'assign' | 'drop'; port: Port; path: Path2D }
   type Target = Route | Control | 'axis'
-  const ids = createPicker<Target>(canvas, { width: W, height: H })
+  const sourcePatch = (t: Target): t is Control => t !== 'axis' && t.kind === 'patch' && t.port.role === 'source'
+  const ids = createPicker<Target>(canvas, { width: W, height: H, canDrag: sourcePatch })
   const patches: Control[] = []
   const assignments: Control[] = []
   const drops: Control[] = []
@@ -177,7 +178,7 @@ function hilmaPanel() {
     if (e.type === 'enter') hovered = e.target
     if (e.type === 'leave') hovered = undefined
     if (e.type === 'down') down(e.target, e.event)
-    if (e.type === 'dragstart' && e.target !== 'axis' && e.target.kind === 'patch' && e.target.port.role === 'source') {
+    if (e.type === 'dragstart' && sourcePatch(e.target)) {
       drag = e.target.port
       selectedPort = drag
       trail = []

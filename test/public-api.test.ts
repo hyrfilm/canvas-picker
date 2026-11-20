@@ -73,3 +73,85 @@ test('cancel during dragstart ends the gesture exactly once', async () => {
     expect(events).toEqual(['dragstart', 'dragcancel'])
   } finally { stop() }
 })
+
+test('raising a widget preserves its handlers and a drop can pick through it', async () => {
+  const canvas = surface()
+  const picker = createPicker(canvas, { width: 200, height: 100 })
+  let x = 10
+  picker.set('widget', ctx => ctx.fillRect(x, 10, 30, 30))
+  picker.set('tray', ctx => ctx.fillRect(0, 0, 180, 80))
+  expect(picker.pick(15, 20)).toBe('tray')
+  picker.raise('widget')
+  let destination: string | undefined
+  picker.on('widget', 'drag', e => {
+    x = 10 + e.dx
+    picker.invalidate()
+  })
+  picker.on('widget', 'dragend', e => {
+    destination = picker.pick(e.x, e.y, { ignore: e.target })
+    expect(picker.pick(e.x, e.y)).toBe('widget')
+  })
+  // Reordering again must retain both scoped handlers.
+  picker.raise('tray')
+  picker.raise('widget')
+  await userEvent.dragAndDrop(canvas, canvas, { sourcePosition: { x: 25, y: 30 }, targetPosition: { x: 125, y: 30 } })
+  expect(x).toBe(110)
+  expect(destination).toBe('tray')
+  picker.dispose()
+})
+
+test('empty-space subscriptions survive clear and disposal removes all subscriptions', async () => {
+  const canvas = surface()
+  const picker = createPicker(canvas)
+  const clicks: string[] = []
+  picker.on(undefined, 'click', () => clicks.push('background'))
+  picker.on('click', () => clicks.push('canvas'))
+  picker.clear()
+  await userEvent.click(canvas)
+  expect(clicks).toEqual(['canvas', 'background'])
+  picker.dispose()
+  picker.dispose()
+  await userEvent.click(canvas)
+  expect(clicks).toHaveLength(2)
+  expect(() => picker.track(() => {})).toThrow()
+})
+
+test('a declined drag keeps click handling and checks eligibility once per press', async () => {
+  const canvas = surface()
+  const presses: string[] = []
+  const picker = createPicker(canvas, { canDrag: target => { presses.push(target); return false } })
+  picker.set('button', ctx => ctx.fillRect(0, 0, 300, 150))
+  const events: string[] = []
+  picker.track(e => events.push(e.type))
+  await userEvent.dragAndDrop(canvas, canvas, { sourcePosition: { x: 25, y: 30 }, targetPosition: { x: 125, y: 30 } })
+  expect(presses).toEqual(['button'])
+  expect(events).toContain('click')
+  expect(events.some(type => type.startsWith('drag'))).toBe(false)
+  picker.dispose()
+})
+
+test('fractional dimensions round before resizing and invalid sizes preserve the buffer', () => {
+  const picker = createPicker({ width: 9.8, height: 9.8 })
+  picker.set('plane', ctx => ctx.fillRect(0, 0, 30, 30))
+  expect(picker.pick(9, 9)).toBe('plane')
+  picker.resize(20.8, 18.2)
+  expect(picker.pick(20, 17)).toBe('plane')
+  expect(picker.pick(20, 18)).toBeUndefined()
+  expect(() => picker.resize(4, NaN)).toThrow()
+  expect(picker.pick(20, 17)).toBe('plane')
+})
+
+test('disposing during a drag cancels once and releases capture', async () => {
+  const canvas = surface()
+  const picker = createPicker(canvas)
+  picker.set('widget', ctx => ctx.fillRect(0, 0, 300, 150))
+  const events: string[] = []
+  let pointer = -1
+  picker.on('dragstart', e => { pointer = e.event.pointerId; picker.dispose() })
+  picker.on('widget', 'dragcancel', () => { events.push('cancel'); picker.dispose() })
+  picker.on('dragend', () => events.push('end'))
+  await userEvent.dragAndDrop(canvas, canvas, { sourcePosition: { x: 25, y: 30 }, targetPosition: { x: 125, y: 30 } })
+  expect(events).toEqual(['cancel'])
+  expect(canvas.hasPointerCapture(pointer)).toBe(false)
+  expect(picker.pick(20, 20)).toBeUndefined()
+})

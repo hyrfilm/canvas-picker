@@ -67,9 +67,11 @@ function polygons(parent: HTMLElement, options: PickingOptions, showBuffer: bool
   controls.append(add, close, clear)
   card.insertBefore(controls, canvas)
   type Polygon = typeof drawnPolygons[number]
-  const ids = createPicker<Polygon | 'close-polygon'>(canvas, { width, height, ...options })
   const shapes = drawnPolygons
   let draft: { x: number; y: number }[] = [], drawing = shapes.length === 0
+  const ids = createPicker<Polygon | 'close-polygon'>(canvas, {
+    width, height, ...options, canDrag: target => !drawing && target !== 'close-polygon',
+  })
   let selected = shapes.at(-1)
   let hovered: Polygon | 'close-polygon' | undefined, dragging = false
   let origin = { x: 0, y: 0 }
@@ -112,7 +114,7 @@ function polygons(parent: HTMLElement, options: PickingOptions, showBuffer: bool
       case 'enter': hovered = e.target; break
       case 'leave': hovered = undefined; break
       case 'dragstart':
-        if (drawing || !shape) return
+        if (!shape) return
         selected = shape
         origin = { x: shape.x, y: shape.y }
         dragging = true
@@ -120,7 +122,7 @@ function polygons(parent: HTMLElement, options: PickingOptions, showBuffer: bool
       case 'drag':
       case 'dragend':
       case 'dragcancel':
-        if (!dragging || !shape) return
+        if (!shape) return
         shape.x = origin.x + (e.type === 'dragcancel' ? 0 : e.dx)
         shape.y = origin.y + (e.type === 'dragcancel' ? 0 : e.dy)
         dragging = e.type === 'drag'

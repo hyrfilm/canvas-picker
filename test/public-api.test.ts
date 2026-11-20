@@ -74,14 +74,14 @@ test('cancel during dragstart ends the gesture exactly once', async () => {
   } finally { stop() }
 })
 
-test('raising a widget preserves its handlers and a drop can pick through it', async () => {
+test('bringing a widget to the front preserves its handlers and a drop can pick through it', async () => {
   const canvas = surface()
   const picker = createPicker(canvas, { width: 200, height: 100 })
   let x = 10
   picker.set('widget', ctx => ctx.fillRect(x, 10, 30, 30))
   picker.set('tray', ctx => ctx.fillRect(0, 0, 180, 80))
   expect(picker.pick(15, 20)).toBe('tray')
-  picker.raise('widget')
+  picker.bringToFront('widget')
   let destination: string | undefined
   picker.on('widget', 'drag', e => {
     x = 10 + e.dx
@@ -92,12 +92,25 @@ test('raising a widget preserves its handlers and a drop can pick through it', a
     expect(picker.pick(e.x, e.y)).toBe('widget')
   })
   // Reordering again must retain both scoped handlers.
-  picker.raise('tray')
-  picker.raise('widget')
+  picker.sendToBack('widget')
+  expect(picker.pick(15, 20)).toBe('tray')
+  picker.bringToFront('widget')
   await userEvent.dragAndDrop(canvas, canvas, { sourcePosition: { x: 25, y: 30 }, targetPosition: { x: 125, y: 30 } })
   expect(x).toBe(110)
   expect(destination).toBe('tray')
   picker.dispose()
+})
+
+test('sending a target to the back preserves the order of every other target', () => {
+  const picker = createPicker({ width: 20, height: 20 })
+  for (const id of ['first', 'second', 'third']) picker.set(id, ctx => ctx.fillRect(0, 0, 20, 20))
+  picker.sendToBack('third')
+  picker.sendToBack('unknown')
+  expect(picker.pick(10, 10)).toBe('second')
+  expect(picker.pick(10, 10, { ignore: 'second' })).toBe('first')
+  picker.delete('first')
+  picker.delete('second')
+  expect(picker.pick(10, 10)).toBe('third')
 })
 
 test('empty-space subscriptions survive clear and disposal removes all subscriptions', async () => {

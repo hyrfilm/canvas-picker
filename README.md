@@ -60,7 +60,7 @@ The exclusion applies to that query. Ordinary hover and `up` still report the to
 
 TypeScript defaults to string IDs. Use `createPicker<Knob>(canvas)` for model objects. Keys follow JavaScript Map equality. Reuse the same object instance across renders, or use a stable primitive ID. Empty space returns `undefined`.
 
-- `set(target, shape)` registers geometry. Later registrations draw on top. Updating a target keeps its position. `raise(target)` brings it to the front and preserves its handlers. Raising an unknown target does nothing.
+- `set(target, shape)` registers geometry. Later registrations draw on top. Updating a target keeps its position. `bringToFront(target)` and `sendToBack(target)` move a target to the top or bottom of the pick order. Both preserve its handlers and the relative order of the other targets. The picker ignores unknown targets.
 - `filled(path, margin?)` and `stroked(path, width)` create pick shapes from a `Path2D`. A custom shape receives a context with colour and opacity already set. The picker begins a fresh path for each call and saves and restores context state around it. Shapes may run again during hit verification, so keep drawing callbacks free of application state changes.
 - `pick(x, y)` accepts coordinates in the space where shapes draw. `setTransform(matrix)` sets the invertible 2D transform from that space to buffer pixels. Pointer positions and drag deltas use shape units.
 - `invalidate()` marks geometry stale after a model changes. The next pick or `drawBuffer(ctx)` redraws it. `drawBuffer` paints the current pick buffer at the destination context’s origin, respecting its transform.

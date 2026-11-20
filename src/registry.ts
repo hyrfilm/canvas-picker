@@ -13,7 +13,7 @@ export function createRegistry<T>(
   picker: IndexPicker,
   { verify = true, neighbours = verify ? 0 : 2 }: PickingOptions = {},
 ) {
-  const shapes = new Map<T, Shape>()
+  let shapes = new Map<T, Shape>()
   const ids = new Map<number, T>()
   let dirty = false
 
@@ -45,11 +45,21 @@ export function createRegistry<T>(
       dirty = true
     },
 
-    raise(id: T) {
+    bringToFront(id: T) {
       const shape = shapes.get(id)
       if (!shape) return
       shapes.delete(id)
       shapes.set(id, shape)
+      dirty = true
+    },
+
+    sendToBack(id: T) {
+      const shape = shapes.get(id)
+      if (!shape) return
+      // Updating an existing Map entry keeps its first insertion position.
+      const reordered = new Map<T, Shape>([[id, shape]])
+      for (const [key, draw] of shapes) reordered.set(key, draw)
+      shapes = reordered
       dirty = true
     },
 

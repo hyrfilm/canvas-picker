@@ -10,7 +10,8 @@ interface Size { width: number; height: number }
 
 export interface Picker<T> {
   set(target: T, shape: Shape): void
-  raise(target: T): void
+  bringToFront(target: T): void
+  sendToBack(target: T): void
   delete(target: T): void
   clear(): void
   invalidate(): void

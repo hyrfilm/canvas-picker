@@ -1,15 +1,17 @@
 import { createIndexPicker, type Shape } from './index-buffer.js'
-import { createRegistry, type PickingOptions } from './registry.js'
+import { createRegistry, type PickingOptions, type StackPosition } from './registry.js'
 import { canvasPoint, listen, type EventType, type Handler, type PickerEvent, type Point } from './interaction.js'
 
+export { Front, Back } from './registry.js'
 export { filled, stroked } from './shapes.js'
-export type { Shape, PickingOptions, EventType, Handler, PickerEvent, Point }
+export type { StackPosition, Shape, PickingOptions, EventType, Handler, PickerEvent, Point }
 
 type Key = {} | null
 interface Size { width: number; height: number }
 
 export interface Picker<T> {
   set(target: T, shape: Shape): void
+  sendTo(target: T, position: StackPosition): void
   bringToFront(target: T): void
   sendToBack(target: T): void
   delete(target: T): void

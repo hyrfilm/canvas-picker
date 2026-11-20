@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'vitest'
 import { userEvent } from 'vitest/browser'
-import { createPicker, type PickerEvent } from '../src/index.js'
+import { Back, Front, createPicker, type StackPosition, type PickerEvent } from '../src/index.js'
 
 function surface() {
   const canvas = document.createElement('canvas')
@@ -111,6 +111,24 @@ test('sending a target to the back preserves the order of every other target', (
   picker.delete('first')
   picker.delete('second')
   expect(picker.pick(10, 10)).toBe('third')
+})
+
+test('sendTo accepts a position from application state and validates JavaScript inputs', () => {
+  const picker = createPicker({ width: 20, height: 20 })
+  for (const id of ['widget', 'tray']) picker.set(id, ctx => ctx.fillRect(0, 0, 20, 20))
+  const commands: { position: StackPosition; top: string }[] = [
+    { position: Front, top: 'widget' },
+    { position: Back, top: 'tray' },
+  ]
+  for (const { position, top } of commands) {
+    picker.sendTo('widget', position)
+    expect(picker.pick(10, 10)).toBe(top)
+  }
+  // @ts-expect-error A symbol with the same description is a different value.
+  expect(() => picker.sendTo('widget', Symbol('Front'))).toThrow(TypeError)
+  // @ts-expect-error Raw strings cannot select a stack position.
+  expect(() => picker.sendTo('widget', 'front')).toThrow(TypeError)
+  expect(picker.pick(10, 10)).toBe('tray')
 })
 
 test('empty-space subscriptions survive clear and disposal removes all subscriptions', async () => {

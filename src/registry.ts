@@ -1,5 +1,9 @@
 import type { IndexPicker, Shape } from './index-buffer.js'
 
+export const Front = Symbol('Front')
+export const Back = Symbol('Back')
+export type StackPosition = typeof Front | typeof Back
+
 export interface PickingOptions {
   verify?: boolean
   neighbours?: number
@@ -36,6 +40,27 @@ export function createRegistry<T>(
     dirty = false
   }
 
+  function sendTo(id: T, position: StackPosition) {
+    const shape = shapes.get(id)
+    if (!shape) return
+    switch (position) {
+      case Front:
+        shapes.delete(id)
+        shapes.set(id, shape)
+        break
+      case Back: {
+        // Updating an existing Map entry keeps its first insertion position.
+        const reordered = new Map<T, Shape>([[id, shape]])
+        for (const [key, draw] of shapes) reordered.set(key, draw)
+        shapes = reordered
+        break
+      }
+      default:
+        throw new TypeError('Expected Front or Back')
+    }
+    dirty = true
+  }
+
   return {
     // Later ids are drawn on top of earlier ones.
     set(id: T, shape: Shape) {
@@ -45,23 +70,9 @@ export function createRegistry<T>(
       dirty = true
     },
 
-    bringToFront(id: T) {
-      const shape = shapes.get(id)
-      if (!shape) return
-      shapes.delete(id)
-      shapes.set(id, shape)
-      dirty = true
-    },
-
-    sendToBack(id: T) {
-      const shape = shapes.get(id)
-      if (!shape) return
-      // Updating an existing Map entry keeps its first insertion position.
-      const reordered = new Map<T, Shape>([[id, shape]])
-      for (const [key, draw] of shapes) reordered.set(key, draw)
-      shapes = reordered
-      dirty = true
-    },
+    sendTo,
+    bringToFront: (id: T) => sendTo(id, Front),
+    sendToBack: (id: T) => sendTo(id, Back),
 
     delete(id: T) {
       shapes.delete(id)

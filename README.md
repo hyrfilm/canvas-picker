@@ -67,6 +67,26 @@ TypeScript defaults to string IDs. Use `createPicker<Knob>(canvas)` for model ob
 - `resize(width, height)` changes the pick buffer resolution, rounds positive fractional sizes to the nearest pixel (minimum one), and retains the transform and registrations. CSS resizing alone is handled by the pointer mapping.
 - The default mapping handles borders, padding and axis-aligned positive CSS scaling with the canvas bitmap filling its content box. Supply `mapPoint(event)` returning `{ x, y }` in shape coordinates for custom layouts such as a CSS-rotated canvas.
 
+## Pick order
+
+Use `picker.bringToFront(target)` or `picker.sendToBack(target)` for a fixed command. Both call `picker.sendTo(target, position)`. Import `Front` and `Back` when the position comes from application state or a control.
+
+```ts
+import { Front, Back, type StackPosition } from 'canvas-picker'
+
+const choices: { label: string; position: StackPosition }[] = [
+  { label: 'Bring to front', position: Front },
+  { label: 'Send to back', position: Back },
+]
+select.replaceChildren(...choices.map(choice => new Option(choice.label)))
+select.onchange = () => {
+  const choice = choices[select.selectedIndex]
+  if (choice) picker.sendTo(target, choice.position)
+}
+```
+
+`Front` and `Back` are symbols exported for JavaScript and TypeScript. The `StackPosition` type is `typeof Front | typeof Back`.
+
 ## Lower-level picking
 
 Import `createIndexPicker(width, height)` from `canvas-picker/index-buffer` for direct numeric-index drawing and pixel reads. The high-level picker verifies by default that the candidate shape covers at least half the sampled pixel. At antialiased overlaps a pick can return another overlapping shape or empty space. For an exact geometric boundary test, use the original geometry directly. The playground demonstrates the `verify` and `neighbours` options.

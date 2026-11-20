@@ -94,3 +94,71 @@ test('releasing the primary button while a second button is held ends the drag o
     expect(events).toEqual(['dragend'])
   } finally { picker.dispose(); el.remove() }
 })
+
+test.each(['delete', 'clear'] as const)('%s cancels the old drag before a replacement can receive it', async operation => {
+  const el = canvas()
+  const picker = createPicker<number>(el)
+  const id = NaN
+  const draw = (ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D) => ctx.fillRect(0, 0, 220, 100)
+  picker.set(id, draw)
+  const events: string[] = []
+  let capturedAfterRemoval = true
+  picker.track(e => { if ('dx' in e) events.push(e.type) })
+  picker.on(id, 'drag', () => {
+    if (operation === 'delete') picker.delete(id)
+    else picker.clear()
+  })
+  picker.on(id, 'dragcancel', e => {
+    events.push('cancel')
+    capturedAfterRemoval = el.hasPointerCapture(e.event.pointerId)
+    // The cancellation handler can rebuild the widget with the same key.
+    picker.set(id, draw)
+    picker.on(id, 'drag', () => events.push('replacement drag'))
+    picker.on(id, 'dragend', () => events.push('replacement end'))
+    picker.on(id, 'click', () => events.push('replacement click'))
+  })
+  try {
+    await userEvent.dragAndDrop(el, el, motion)
+    expect(events).toEqual(['dragstart', 'drag', 'dragcancel', 'cancel'])
+    expect(capturedAfterRemoval).toBe(false)
+    await userEvent.click(el, { position: { x: 20, y: 20 } })
+    expect(events).toEqual(['dragstart', 'drag', 'dragcancel', 'cancel', 'replacement click'])
+  } finally { picker.dispose(); el.remove() }
+})
+
+test('removing the target before the drag threshold abandons the press', async () => {
+  const el = canvas()
+  const picker = createPicker(el)
+  picker.set('handle', ctx => ctx.fillRect(0, 0, 220, 100))
+  const events: string[] = []
+  picker.on('handle', 'down', e => {
+    picker.delete('handle')
+    picker.set('handle', ctx => ctx.fillRect(0, 0, 220, 100))
+    picker.track(event => {
+      if ('dx' in event || event.type === 'click') events.push(event.type)
+    })
+    expect(el.hasPointerCapture(e.event.pointerId)).toBe(false)
+  })
+  try {
+    await userEvent.dragAndDrop(el, el, motion)
+    expect(events).toEqual([])
+  } finally { picker.dispose(); el.remove() }
+})
+
+test('removing another target or updating geometry preserves the active gesture', async () => {
+  const el = canvas()
+  const picker = createPicker(el)
+  const events: string[] = []
+  picker.set('handle', ctx => ctx.fillRect(0, 0, 220, 100))
+  picker.set('other', ctx => ctx.fillRect(200, 0, 20, 100))
+  picker.on('handle', 'dragstart', () => {
+    picker.delete('other')
+    picker.set('handle', ctx => ctx.fillRect(0, 0, 10, 10))
+  })
+  picker.on('handle', 'dragcancel', () => events.push('cancel'))
+  picker.on('handle', 'dragend', () => events.push('end'))
+  try {
+    await userEvent.dragAndDrop(el, el, motion)
+    expect(events).toEqual(['end'])
+  } finally { picker.dispose(); el.remove() }
+})

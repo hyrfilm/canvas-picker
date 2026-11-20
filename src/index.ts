@@ -1,6 +1,6 @@
 import { createIndexPicker, type Shape } from './index-buffer.js'
 import { createRegistry, type PickingOptions } from './registry.js'
-import { canvasPoint, listen, type EventType, type Handler, type PickerEvent, type Point } from './interaction.js'
+import { canvasPoint, createInteraction, type EventType, type Handler, type PickerEvent, type Point } from './interaction.js'
 
 export { filled, stroked } from './shapes.js'
 export type { Shape, PickingOptions, EventType, Handler, PickerEvent, Point }
@@ -84,26 +84,24 @@ export function createPicker<T extends Key = string>(source: HTMLCanvasElement |
     return { x, y }
   }
   const handlers = new Set<Handler<T>>()
-  const targeted = new Map<T | undefined, Set<Handler<T>>>()
-  let stop: (() => void) | undefined
+  let targeted = new Map<T | undefined, Set<Handler<T>>>()
+  const interaction = createInteraction(canvas, point, picker.pick, dispatch, threshold, options.canDrag)
   let disposed = false
 
+  function dispatch(event: PickerEvent<T>, local = targeted.get(event.target)) {
+    // Snapshot both groups before callbacks can register further listeners.
+    const entries = [...handlers, ...(local ?? [])]
+    for (const fn of entries) if (handlers.has(fn) || local?.has(fn)) fn(event)
+  }
+
   function prune() {
-    if (!handlers.size && !targeted.size) {
-      stop?.()
-      stop = undefined
-    }
+    if (!handlers.size && !targeted.size) interaction.stop()
   }
   function subscribe(group: Set<Handler<T>>, handler: Handler<T>, target?: T) {
     if (disposed) throw new Error('Picker has been disposed')
     const entry: Handler<T> = event => handler(event)
     group.add(entry)
-    stop ??= listen(canvas!, point, picker.pick, event => {
-      // Snapshot both groups before callbacks can register further listeners.
-      const local = targeted.get(event.target)
-      const entries = [...handlers, ...(local ?? [])]
-      for (const fn of entries) if (handlers.has(fn) || local?.has(fn)) fn(event)
-    }, threshold, options.canDrag)
+    interaction.start()
     return () => {
       group.delete(entry)
       if (!group.size && targeted.get(target) === group) targeted.delete(target)
@@ -116,9 +114,8 @@ export function createPicker<T extends Key = string>(source: HTMLCanvasElement |
       if (disposed) return
       disposed = true
       try {
-        stop?.()
+        interaction.stop()
       } finally {
-        stop = undefined
         handlers.clear()
         for (const group of targeted.values()) group.clear()
         targeted.clear()
@@ -127,18 +124,31 @@ export function createPicker<T extends Key = string>(source: HTMLCanvasElement |
     },
     delete(target) {
       picker.delete(target)
-      targeted.get(target)?.clear()
+      const removed = targeted.get(target)
       targeted.delete(target)
-      prune()
+      try {
+        interaction.cancelRegistration(target, e => dispatch(e, removed))
+      } finally {
+        removed?.clear()
+        prune()
+      }
     },
     clear() {
       picker.clear()
-      for (const [target, group] of targeted) {
-        if (target === undefined) continue
-        group.clear()
-        targeted.delete(target)
+      // Detach old groups first: a dragcancel handler can register a replacement.
+      const removed = targeted
+      targeted = new Map()
+      const background = removed.get(undefined)
+      if (background) {
+        targeted.set(undefined, background)
+        removed.delete(undefined)
       }
-      prune()
+      try {
+        interaction.cancelRegistration(undefined, e => dispatch(e, removed.get(e.target)))
+      } finally {
+        for (const group of removed.values()) group.clear()
+        prune()
+      }
     },
     track: handler => subscribe(handlers, handler),
     on<S extends T | undefined, K extends EventType>(...args: [K, Handler<T, K>] | [S, K, (event: PickerEvent<T, K> & { target: S }) => void]) {

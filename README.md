@@ -69,13 +69,24 @@ TypeScript defaults to string IDs. Use `createPicker<Knob>(canvas)` for model ob
 
 ## Pick order
 
-Use `picker.bringToFront(target)` or `picker.sendToBack(target)` for a fixed command. Both call `picker.sendTo(target, position)`. Import `Front` and `Back` when the position comes from application state or a control.
+| Command | Argument to `picker.sendTo(target, position)` |
+| --- | --- |
+| `picker.bringToFront(target)` | `Front` |
+| `picker.bringForward(target)` | `Forward` |
+| `picker.sendBackward(target)` | `Backward` |
+| `picker.sendToBack(target)` | `Back` |
 
-```ts
-import { Front, Back, type StackPosition } from 'canvas-picker'
+`Forward` and `Backward` swap the target with its immediate neighbour in the pick order. At the corresponding end of the stack, the target stays where it is.
 
-const choices: { label: string; position: StackPosition }[] = [
+For an HTML select, keep the symbols alongside their labels and look up the selected option:
+
+```js
+import { Front, Forward, Backward, Back } from 'canvas-picker'
+
+const choices = [
   { label: 'Bring to front', position: Front },
+  { label: 'Bring forward', position: Forward },
+  { label: 'Send backward', position: Backward },
   { label: 'Send to back', position: Back },
 ]
 select.replaceChildren(...choices.map(choice => new Option(choice.label)))
@@ -85,7 +96,7 @@ select.onchange = () => {
 }
 ```
 
-`Front` and `Back` are symbols exported for JavaScript and TypeScript. The `StackPosition` type is `typeof Front | typeof Back`.
+TypeScript callers can use `StackPosition` for a variable that holds any of the four exported symbols.
 
 ## Lower-level picking
 

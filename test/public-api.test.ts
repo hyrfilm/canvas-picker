@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'vitest'
 import { userEvent } from 'vitest/browser'
-import { Back, Front, createPicker, type StackPosition, type PickerEvent } from '../src/index.js'
+import { Back, Backward, Front, Forward, createPicker, type StackPosition, type PickerEvent } from '../src/index.js'
 
 function surface() {
   const canvas = document.createElement('canvas')
@@ -111,6 +111,25 @@ test('sending a target to the back preserves the order of every other target', (
   picker.delete('first')
   picker.delete('second')
   expect(picker.pick(10, 10)).toBe('third')
+})
+
+test('relative moves cross exactly one neighbour and stop at each end', () => {
+  const picker = createPicker<number>({ width: 20, height: 20 })
+  for (const id of [NaN, 1, 2]) picker.set(id, ctx => ctx.fillRect(0, 0, 20, 20))
+  const top = () => picker.pick(10, 10)
+  const belowTop = () => picker.pick(10, 10, { ignore: top() })
+  picker.sendTo(NaN, Backward)
+  expect(belowTop()).toBe(1)
+  picker.bringForward(NaN)
+  expect(top()).toBe(2)
+  expect(belowTop()).toBeNaN()
+  picker.sendTo(NaN, Forward)
+  picker.bringForward(NaN)
+  expect(top()).toBeNaN()
+  expect(belowTop()).toBe(2)
+  picker.sendBackward(NaN)
+  expect(top()).toBe(2)
+  expect(belowTop()).toBeNaN()
 })
 
 test('sendTo accepts a position from application state and validates JavaScript inputs', () => {

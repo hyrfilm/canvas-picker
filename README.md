@@ -1,14 +1,13 @@
 # canvas-picker
 
-Give things on a canvas an ID, then find out what you're pointing at.
-Useful for knobs, points, cables, or whatever else you're drawing.
+[examples & demos](https://hyrfilm.github.io/hyrfilm/canvas-picker)
 
-The trick is a hidden canvas: each thing gets its own colour, and the pixel
-under the pointer tells us which thing is there. No separate hit-testing
-formula for every shape.
+This library mostly useful for applications like games, editors, or other applications where you use html5 canvas as part your user-interface. It implements a pretty basic "algorithm" (if it could be called that) called color-picking. TL;DR - you use an offscreen buffer where you render shapes in addition to the regular rendering of a scene. Each shape you want to be able to "pick out" with the mouse or whatever is given a unique color in such a
+way that shapes can be uniquely identified.
 
-Start with [examples/basic.ts](examples/basic.ts) for a small, runnable example
-of each layer: numeric indices, string IDs, then pointer events.
+This has several advantages: a single way of identifying arbitrarily complex shapes, like SVG-paths, or thin lines, multiple overlapping shapes etc. It usually is faster than analytical approaches as well, unless your shapes are very few and very simple.
+
+Canvas-picker is small and simple library. It provides some modules from low-level (ie 'pixel at position') to where you can associate whatever objects, numbers, strings or whatever with your shape, add event listeners and, sort of treat them as they were DOM-objects. So, clicking, hovering, dragging - that sort of thing.
 
 ```ts
 import { createPicker, createIdPicker, trackPointer } from './pick'
@@ -41,28 +40,8 @@ and `cancel`, with the starting ID and movement in element pixels.
 Your app decides what moves and what accepts a drop. Its returned function
 removes the drag listeners.
 
-The buffer has its own coordinates. If your displayed canvas has a different
-size, scale the pointer coordinates before calling `pick`. The demos show how.
-
-By default, we double-check that the shape found in the buffer really is
-under the pointer. At overlapping edges you might get another overlapping
-shape, or no hit. There are also `{ verify, neighbours }` options on
-`createIdPicker`. Neighbour filtering can reduce false matches, but can miss
-small shapes too. Try the playground to see the difference.
-
-## Try it
+## Installing
 
 ```sh
-npm install
-npm run dev
+npm install canvas-picker
 ```
-
-- `/`: cables and an envelope editor.
-- `/examples/basic.html`: the three basic examples above (dev server).
-- `/playground.html`: SVG triangles, moving circles, polygons you can draw and drag, and picking settings.
-- `/checks.html`: the actual browser checks, including overlapping-path scans.
-
-`npm test` runs the checks and pointer/drag interactions in Chrome.
-`npm run test:coverage` reports library coverage and writes a browsable report
-to `coverage/index.html`.
-`npm run build` includes all three pages for `npm run preview`.

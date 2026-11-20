@@ -1,11 +1,5 @@
 import type { IndexPicker, Shape } from './index-buffer.js'
 
-export const Front = Symbol('Front')
-export const Back = Symbol('Back')
-export const Forward = Symbol('Forward')
-export const Backward = Symbol('Backward')
-export type StackPosition = typeof Front | typeof Back | typeof Forward | typeof Backward
-
 export interface PickingOptions {
   verify?: boolean
   neighbours?: number
@@ -19,7 +13,7 @@ export function createRegistry<T>(
   picker: IndexPicker,
   { verify = true, neighbours = verify ? 0 : 2 }: PickingOptions = {},
 ) {
-  let shapes = new Map<T, Shape>()
+  const shapes = new Map<T, Shape>()
   const ids = new Map<number, T>()
   let dirty = false
 
@@ -42,38 +36,6 @@ export function createRegistry<T>(
     dirty = false
   }
 
-  function sendTo(id: T, position: StackPosition) {
-    const shape = shapes.get(id)
-    if (!shape) return
-    switch (position) {
-      case Front:
-        shapes.delete(id)
-        shapes.set(id, shape)
-        break
-      case Back: {
-        // Updating an existing Map entry keeps its first insertion position.
-        const reordered = new Map<T, Shape>([[id, shape]])
-        for (const [key, draw] of shapes) reordered.set(key, draw)
-        shapes = reordered
-        break
-      }
-      case Forward:
-      case Backward: {
-        const entries = Array.from(shapes)
-        // Map uses SameValueZero, including NaN and signed zero.
-        const current = entries.findIndex(([key]) => key === id || Object.is(key, id))
-        const next = current + (position === Forward ? 1 : -1)
-        if (next < 0 || next >= entries.length) return
-        ;[entries[current], entries[next]] = [entries[next], entries[current]]
-        shapes = new Map(entries)
-        break
-      }
-      default:
-        throw new TypeError('Expected Front, Back, Forward, or Backward')
-    }
-    dirty = true
-  }
-
   return {
     // Later ids are drawn on top of earlier ones.
     set(id: T, shape: Shape) {
@@ -82,12 +44,6 @@ export function createRegistry<T>(
       shapes.set(id, shape)
       dirty = true
     },
-
-    sendTo,
-    bringToFront: (id: T) => sendTo(id, Front),
-    sendToBack: (id: T) => sendTo(id, Back),
-    bringForward: (id: T) => sendTo(id, Forward),
-    sendBackward: (id: T) => sendTo(id, Backward),
 
     delete(id: T) {
       shapes.delete(id)

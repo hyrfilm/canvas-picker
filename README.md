@@ -60,43 +60,12 @@ The exclusion applies to that query. Ordinary hover and `up` still report the to
 
 TypeScript defaults to string IDs. Use `createPicker<Knob>(canvas)` for model objects. Keys follow JavaScript Map equality. Reuse the same object instance across renders, or use a stable primitive ID. Empty space returns `undefined`.
 
-- `set(target, shape)` registers geometry. Later registrations draw on top. Updating a target keeps its position. `bringToFront(target)` and `sendToBack(target)` move a target to the top or bottom of the pick order. Both preserve its handlers and the relative order of the other targets. The picker ignores unknown targets.
+- Register hit shapes with `set(target, shape)` in the same back-to-front order your app uses to draw them. You can register them in a separate pass or as you draw. Updating an existing target’s geometry keeps its original position in that order.
 - `filled(path, margin?)` and `stroked(path, width)` create pick shapes from a `Path2D`. A custom shape receives a context with colour and opacity already set. The picker begins a fresh path for each call and saves and restores context state around it. Shapes may run again during hit verification, so keep drawing callbacks free of application state changes.
 - `pick(x, y)` accepts coordinates in the space where shapes draw. `setTransform(matrix)` sets the invertible 2D transform from that space to buffer pixels. Pointer positions and drag deltas use shape units.
 - `invalidate()` marks geometry stale after a model changes. The next pick or `drawBuffer(ctx)` redraws it. `drawBuffer` paints the current pick buffer at the destination context’s origin, respecting its transform.
 - `resize(width, height)` changes the pick buffer resolution, rounds positive fractional sizes to the nearest pixel (minimum one), and retains the transform and registrations. CSS resizing alone is handled by the pointer mapping.
 - The default mapping handles borders, padding and axis-aligned positive CSS scaling with the canvas bitmap filling its content box. Supply `mapPoint(event)` returning `{ x, y }` in shape coordinates for custom layouts such as a CSS-rotated canvas.
-
-## Pick order
-
-| Command | Argument to `picker.sendTo(target, position)` |
-| --- | --- |
-| `picker.bringToFront(target)` | `Front` |
-| `picker.bringForward(target)` | `Forward` |
-| `picker.sendBackward(target)` | `Backward` |
-| `picker.sendToBack(target)` | `Back` |
-
-`Forward` and `Backward` swap the target with its immediate neighbour in the pick order. At the corresponding end of the stack, the target stays where it is.
-
-For an HTML select, keep the symbols alongside their labels and look up the selected option:
-
-```js
-import { Front, Forward, Backward, Back } from 'canvas-picker'
-
-const choices = [
-  { label: 'Bring to front', position: Front },
-  { label: 'Bring forward', position: Forward },
-  { label: 'Send backward', position: Backward },
-  { label: 'Send to back', position: Back },
-]
-select.replaceChildren(...choices.map(choice => new Option(choice.label)))
-select.onchange = () => {
-  const choice = choices[select.selectedIndex]
-  if (choice) picker.sendTo(target, choice.position)
-}
-```
-
-TypeScript callers can use `StackPosition` for a variable that holds any of the four exported symbols.
 
 ## Lower-level picking
 

@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'vitest'
 import { userEvent } from 'vitest/browser'
-import { Back, Backward, Front, Forward, createPicker, type StackPosition, type PickerEvent } from '../src/index.js'
+import { createPicker, type PickerEvent } from '../src/index.js'
 
 function surface() {
   const canvas = document.createElement('canvas')
@@ -10,7 +10,7 @@ function surface() {
 }
 afterEach(() => document.body.replaceChildren())
 
-test('object keys, z-order, resize and debug drawing share the same lazy buffer', () => {
+test('object keys, registration order, resize and debug drawing share the same lazy buffer', () => {
   const picker = createPicker<object | string | null>({ width: 20, height: 20 })
   const shape = {}
   const draw = (ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D) => ctx.fillRect(1, 1, 12, 12)
@@ -74,14 +74,13 @@ test('cancel during dragstart ends the gesture exactly once', async () => {
   } finally { stop() }
 })
 
-test('bringing a widget to the front preserves its handlers and a drop can pick through it', async () => {
+test('a drop can pick through a widget registered above its tray', async () => {
   const canvas = surface()
   const picker = createPicker(canvas, { width: 200, height: 100 })
   let x = 10
-  picker.set('widget', ctx => ctx.fillRect(x, 10, 30, 30))
   picker.set('tray', ctx => ctx.fillRect(0, 0, 180, 80))
-  expect(picker.pick(15, 20)).toBe('tray')
-  picker.bringToFront('widget')
+  picker.set('widget', ctx => ctx.fillRect(x, 10, 30, 30))
+  expect(picker.pick(15, 20)).toBe('widget')
   let destination: string | undefined
   picker.on('widget', 'drag', e => {
     x = 10 + e.dx
@@ -91,63 +90,10 @@ test('bringing a widget to the front preserves its handlers and a drop can pick 
     destination = picker.pick(e.x, e.y, { ignore: e.target })
     expect(picker.pick(e.x, e.y)).toBe('widget')
   })
-  // Reordering again must retain both scoped handlers.
-  picker.sendToBack('widget')
-  expect(picker.pick(15, 20)).toBe('tray')
-  picker.bringToFront('widget')
   await userEvent.dragAndDrop(canvas, canvas, { sourcePosition: { x: 25, y: 30 }, targetPosition: { x: 125, y: 30 } })
   expect(x).toBe(110)
   expect(destination).toBe('tray')
   picker.dispose()
-})
-
-test('sending a target to the back preserves the order of every other target', () => {
-  const picker = createPicker({ width: 20, height: 20 })
-  for (const id of ['first', 'second', 'third']) picker.set(id, ctx => ctx.fillRect(0, 0, 20, 20))
-  picker.sendToBack('third')
-  picker.sendToBack('unknown')
-  expect(picker.pick(10, 10)).toBe('second')
-  expect(picker.pick(10, 10, { ignore: 'second' })).toBe('first')
-  picker.delete('first')
-  picker.delete('second')
-  expect(picker.pick(10, 10)).toBe('third')
-})
-
-test('relative moves cross exactly one neighbour and stop at each end', () => {
-  const picker = createPicker<number>({ width: 20, height: 20 })
-  for (const id of [NaN, 1, 2]) picker.set(id, ctx => ctx.fillRect(0, 0, 20, 20))
-  const top = () => picker.pick(10, 10)
-  const belowTop = () => picker.pick(10, 10, { ignore: top() })
-  picker.sendTo(NaN, Backward)
-  expect(belowTop()).toBe(1)
-  picker.bringForward(NaN)
-  expect(top()).toBe(2)
-  expect(belowTop()).toBeNaN()
-  picker.sendTo(NaN, Forward)
-  picker.bringForward(NaN)
-  expect(top()).toBeNaN()
-  expect(belowTop()).toBe(2)
-  picker.sendBackward(NaN)
-  expect(top()).toBe(2)
-  expect(belowTop()).toBeNaN()
-})
-
-test('sendTo accepts a position from application state and validates JavaScript inputs', () => {
-  const picker = createPicker({ width: 20, height: 20 })
-  for (const id of ['widget', 'tray']) picker.set(id, ctx => ctx.fillRect(0, 0, 20, 20))
-  const commands: { position: StackPosition; top: string }[] = [
-    { position: Front, top: 'widget' },
-    { position: Back, top: 'tray' },
-  ]
-  for (const { position, top } of commands) {
-    picker.sendTo('widget', position)
-    expect(picker.pick(10, 10)).toBe(top)
-  }
-  // @ts-expect-error A symbol with the same description is a different value.
-  expect(() => picker.sendTo('widget', Symbol('Front'))).toThrow(TypeError)
-  // @ts-expect-error Raw strings cannot select a stack position.
-  expect(() => picker.sendTo('widget', 'front')).toThrow(TypeError)
-  expect(picker.pick(10, 10)).toBe('tray')
 })
 
 test('empty-space subscriptions survive clear and disposal removes all subscriptions', async () => {

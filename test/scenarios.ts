@@ -1,5 +1,4 @@
-import { createIdPicker, createPicker, type Shape } from '../src/pick'
-import { filled, stroked } from '../src/shapes'
+import { createPicker, filled, stroked, type Shape, type PickingOptions } from '../src/index.js'
 
 type Scene = {
   width: number
@@ -57,19 +56,17 @@ function thinScene(): Scene {
   }
 }
 
-function loadScene(scene: Scene, options: Parameters<typeof createIdPicker>[1] = {}) {
-  const picker = createPicker(scene.width, scene.height)
-  if (scene.transform) picker.ctx.setTransform(scene.transform)
-  const ids = createIdPicker(picker, options)
-  for (const shape of scene.shapes) ids.set(shape.id, shape.draw)
-  ids.pick(0, 0)
-  return { picker, ids }
+function loadScene(scene: Scene, options: PickingOptions = {}) {
+  const picker = createPicker({ width: scene.width, height: scene.height, ...options })
+  if (scene.transform) picker.setTransform(scene.transform)
+  for (const shape of scene.shapes) picker.set(shape.id, shape.draw)
+  return picker
 }
 
 // Render each shape separately at full size. This reference is independent of
 // the small verification buffer; it checks presence, not identical edge alpha.
-function scanScene(scene: Scene, options: Parameters<typeof createIdPicker>[1] = {}) {
-  const { ids } = loadScene(scene, options)
+function scanScene(scene: Scene, options: PickingOptions = {}) {
+  const ids = loadScene(scene, options)
   const ctx = new OffscreenCanvas(scene.width, scene.height).getContext('2d', { willReadFrequently: true })!
   const coverage = new Map<string, Uint8ClampedArray>()
   for (const shape of scene.shapes) {
@@ -78,9 +75,12 @@ function scanScene(scene: Scene, options: Parameters<typeof createIdPicker>[1] =
     shape.draw(ctx)
     coverage.set(shape.id, ctx.getImageData(0, 0, scene.width, scene.height).data)
   }
+  const inverse = scene.transform?.inverse()
   let hits = 0, unrelated = 0
   for (let y = 0; y < scene.height; y++) for (let x = 0; x < scene.width; x++) {
-    const id = ids.pick(x, y)
+    const pixel = { x: x + 0.5, y: y + 0.5 }
+    const point = inverse?.transformPoint(pixel) ?? pixel
+    const id = ids.pick(point.x, point.y)
     if (id !== undefined) {
       hits++
       if (coverage.get(id)![4 * (y * scene.width + x) + 3] === 0) unrelated++

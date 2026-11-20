@@ -1,6 +1,6 @@
 // Optional pick shapes for Path2D geometry. pick.ts does not depend on this.
 
-import type { Shape } from './pick'
+import type { Shape } from './index-buffer.js'
 
 // The inside of a closed path, grown outward by margin on every side.
 export function filled(path: Path2D, margin = 0): Shape {

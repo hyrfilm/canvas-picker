@@ -1,18 +1,10 @@
 import { readFileSync, writeFileSync, mkdtempSync, mkdirSync } from 'node:fs'
-import { stripTypeScriptTypes } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-const root = new URL('../', import.meta.url)
 const htmlPath = fileURLToPath(new URL('candidate-verification.prototype.html', import.meta.url))
-const source = ['src/pick.ts', 'src/shapes.ts']
-  .map(path => stripTypeScriptTypes(readFileSync(new URL(path, root), 'utf8')))
-  .join('\n')
-const html = readFileSync(htmlPath, 'utf8').replace(
-  /\/\* BEGIN LIBRARY SNAPSHOT \*\/[\s\S]*?\/\* END LIBRARY SNAPSHOT \*\//,
-  '/* BEGIN LIBRARY SNAPSHOT */\n' + source + '\n/* END LIBRARY SNAPSHOT */',
-)
-writeFileSync(htmlPath, html)
+// Compare against the original baseline embedded in the experiment.
+const html = readFileSync(htmlPath, 'utf8')
 // Make the standalone experiment available from the existing Vite preview.
 mkdirSync(new URL('../dist/experiments/', import.meta.url), { recursive: true })
 writeFileSync(new URL('../dist/experiments/candidate-verification.prototype.html', import.meta.url), html)

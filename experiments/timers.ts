@@ -1,8 +1,6 @@
 // Bind IDs to input callbacks, route commands to state, then pull a view each frame.
 // Both rendering interfaces below use the same state and the same pick geometry.
-import { createIdPicker, createPicker, trackPointer, type Shape, type PointerEventType } from '../src/pick'
-import { filled } from '../src/shapes'
-import { trackDrag } from '../src/drag'
+import { createPicker, filled } from '../src/index.js'
 import { createStepState, type StepEvent, type StepAction } from './timers-state'
 import { circlePath, timerPaths, drawMini, drawDetailFrame, drawDetail, collectStepWidgets, drawDetailWidgets } from './timers-render'
 
@@ -58,47 +56,42 @@ function send(command: StepEvent) {
   events.dispatchEvent(new CustomEvent('step', { detail: command }))
 }
 
-const picker = createPicker(width, height), ids = createIdPicker(picker)
-const listeners = new Map<string, (type: PointerEventType, event: MouseEvent) => void>()
+const ids = createPicker(canvas, { width, height, canDrag: id => id === 'phase' })
 let current = timers[0], currentIds = current.stepIds.slice(0, current.count)
 let geometry = timerPaths(currentIds)
 let playing = true, scrubbing = false, phaseAtStart = 0, pointerCursor = 'default'
-const point = (x: number, y: number) => ({ x: x * width / canvas.clientWidth, y: y * height / canvas.clientHeight })
-const pick = (x: number, y: number) => { const p = point(x, y); return ids.pick(p.x, p.y) }
-
-// A local experiment in binding a shape and its input callback together.
-// The picker itself still only handles geometry and IDs.
-function registerShape(id: string, shape: Shape, onInput: (type: PointerEventType, event: MouseEvent) => void) {
-  ids.set(id, shape)
-  listeners.set(id, onInput)
-}
+let hoveredStep: string | undefined
 function registerGeometry() {
+  if (hoveredStep !== undefined) send({ type: 'hover', id: hoveredStep, active: false })
+  hoveredStep = undefined
   ids.clear()
-  timers.forEach((timer, order) => registerShape(timer.id, filled(circlePath(240 + order * 120, 54, 29), 4), type => {
-    if (type === 'click') { current = timer; stepCount.value = String(current.count); registerGeometry() }
-  }))
+  timers.forEach((timer, order) => {
+    ids.set(timer.id, filled(circlePath(240 + order * 120, 54, 29), 4))
+    ids.on(timer.id, 'click', () => {
+      current = timer
+      stepCount.value = String(current.count)
+      registerGeometry()
+    })
+  })
   currentIds = current.stepIds.slice(0, current.count)
   geometry = timerPaths(currentIds)
   for (const [id, step] of geometry.steps) {
-    registerShape(id, filled(step.path, 5), (type, event) => {
-      if (type === 'enter' || type === 'leave') send({ type: 'hover', id, active: type === 'enter' })
-      if (type === 'click') send({ type: event.shiftKey ? 'select' : clickAction.value as StepAction, id })
-    })
+    ids.set(id, filled(step.path, 5))
+    ids.on(id, 'enter', () => { hoveredStep = id; send({ type: 'hover', id, active: true }) })
+    ids.on(id, 'leave', () => { hoveredStep = undefined; send({ type: 'hover', id, active: false }) })
+    ids.on(id, 'click', ({ event }) => send({ type: event.shiftKey ? 'select' : clickAction.value as StepAction, id }))
   }
-  registerShape('phase', filled(geometry.face), () => {})
-  // Retain callbacks for existing state addresses: a later leave event can
-  // still refer to a step from the previously displayed timer.
+  ids.set('phase', filled(geometry.face))
+  ids.on('phase', 'dragstart', () => { phaseAtStart = current.phase; scrubbing = true })
+  ids.on('phase', 'drag', e => { current.phase = ((phaseAtStart + e.dx / width) % 1 + 1) % 1 })
+  ids.on('phase', 'dragend', e => {
+    current.phase = ((phaseAtStart + e.dx / width) % 1 + 1) % 1
+    scrubbing = false
+  })
+  ids.on('phase', 'dragcancel', () => { current.phase = phaseAtStart; scrubbing = false })
 }
-
-trackPointer(canvas, pick, (type, id, event) => {
-  if (type === 'enter') pointerCursor = id === 'phase' ? 'grab' : id === undefined ? 'default' : 'pointer'
-  if (id !== undefined) listeners.get(id)!(type, event)
-})
-trackDrag(canvas, (x, y) => pick(x, y) === 'phase' ? 'phase' : undefined, (type, drag) => {
-  if (type === 'start') { phaseAtStart = current.phase; scrubbing = true }
-  current.phase = type === 'cancel' ? phaseAtStart : ((phaseAtStart + drag.dx / canvas.clientWidth) % 1 + 1) % 1
-  if (type === 'end' || type === 'cancel') scrubbing = false
-})
+ids.on('enter', ({ target }) => { pointerCursor = target === 'phase' ? 'grab' : target === undefined ? 'default' : 'pointer' })
+ids.on('leave', () => { pointerCursor = 'default' })
 play.addEventListener('click', () => { playing = !playing; play.textContent = playing ? 'Pause' : 'Play' })
 document.querySelector('#external-toggle')!.addEventListener('click', () => send({ type: 'toggle', id: currentIds[0] }))
 stepCount.addEventListener('change', () => {
@@ -147,7 +140,7 @@ function frame(now: number) {
     const stepWidgets = collectStepWidgets(currentIds, geometry.steps, state.queries)
     drawDetailWidgets(ctx, stepWidgets, style)
   }
-  if (showBuffer.checked) { ids.pick(-1, -1); ctx.globalAlpha = .75; ctx.drawImage(picker.ctx.canvas, 0, 0); ctx.globalAlpha = 1 }
+  if (showBuffer.checked) { ctx.globalAlpha = .75; ids.drawBuffer(ctx); ctx.globalAlpha = 1 }
   canvas.style.cursor = scrubbing ? 'grabbing' : pointerCursor
   const enabled = currentIds.filter(state.queries.isEnabled).length
   const selected = currentIds.filter(state.queries.isSelected).length

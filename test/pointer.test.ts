@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest'
 import { userEvent } from 'vitest/browser'
-import { trackPointer } from '../src/pick'
+import { createPicker } from '../src/index.js'
 
 test('pointer tracking can be stopped and reattached without duplicate events', async () => {
   const canvas = document.createElement('canvas')
@@ -8,9 +8,11 @@ test('pointer tracking can be stopped and reattached without duplicate events', 
   canvas.height = 100
   canvas.style.display = 'block'
   document.body.append(canvas)
-  const pick = (x: number) => x < 100 ? 'left' : 'right'
+  const picker = createPicker(canvas)
+  picker.set('left', ctx => ctx.fillRect(0, 0, 100, 100))
+  picker.set('right', ctx => ctx.fillRect(100, 0, 120, 100))
   const first: string[] = [], second: string[] = []
-  const stop = trackPointer(canvas, pick, (type, id) => {
+  const stop = picker.track(({ type, target: id }) => {
     first.push(type + ':' + id)
   })
   try {
@@ -21,7 +23,7 @@ test('pointer tracking can be stopped and reattached without duplicate events', 
     await userEvent.click(canvas, { position: { x: 180, y: 20 } })
     expect(first).toEqual(before)
 
-    const stopAgain = trackPointer(canvas, pick, (type, id) => {
+    const stopAgain = picker.track(({ type, target: id }) => {
       second.push(type + ':' + id)
     })
     try {

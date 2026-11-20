@@ -1,5 +1,4 @@
-import { createIdPicker, createPicker, trackPointer } from './pick'
-import { filled, stroked } from './shapes'
+import { createPicker, filled, stroked } from './index.js'
 
 const TAU = Math.PI * 2
 const showBuffer = document.querySelector<HTMLInputElement>('#show-buffer')!
@@ -54,19 +53,6 @@ function hilmaPanel() {
   const ctx = canvas.getContext('2d')!
   const ripple = !matchMedia('(prefers-reduced-motion: reduce)').matches
 
-  const picker = createPicker(W, H)
-  const ids = createIdPicker(picker)
-
-  // The pick buffer is in layout units, pointer events are in CSS pixels.
-  const toLayout = (x: number, y: number) => ({
-    x: (x * W) / canvas.clientWidth,
-    y: (y * H) / canvas.clientHeight,
-  })
-  const pick = (x: number, y: number) => {
-    const p = toLayout(x, y)
-    return ids.pick(p.x, p.y)
-  }
-
   type Port = {
     id: string
     role: 'source' | 'destination'
@@ -77,17 +63,16 @@ function hilmaPanel() {
     outer: Point
     label: Point
   }
-  type Route = { from: Port; to: Port; path: Path2D }
-
-  // Static geometry, keyed by pick id, and what each pick id belongs to.
-  const patchPaths = new Map<string, Path2D>()
-  const assignPaths = new Map<string, Path2D>()
-  const dropPaths = new Map<string, Path2D>()
-  const patchOf = new Map<string, Port>()
-  const assignOf = new Map<string, Port>()
-  const dropOf = new Map<string, Port>()
+  type Route = { kind: 'route'; id: string; from: Port; to: Port; path: Path2D }
+  type Control = { kind: 'patch' | 'assign' | 'drop'; port: Port; path: Path2D }
+  type Target = Route | Control | 'axis'
+  const sourcePatch = (t: Target): t is Control => t !== 'axis' && t.kind === 'patch' && t.port.role === 'source'
+  const ids = createPicker<Target>(canvas, { width: W, height: H, canDrag: sourcePatch })
+  const patches: Control[] = []
+  const assignments: Control[] = []
+  const drops: Control[] = []
   const ports: Port[] = []
-  const routes = new Map<string, Route>()
+  const routes = new Set<Route>()
 
   const angleOf = (index: number) => -Math.PI / 2 + (index * TAU) / N
   const at = (angle: number, distance: number) => ({
@@ -125,17 +110,9 @@ function hilmaPanel() {
     }
     ports.push(port)
 
-    patchPaths.set(`${id}/patch`, circle(port.patch, 5.9))
-    patchOf.set(`${id}/patch`, port)
-    assignPaths.set(`${id}/assign`, circle(port.assign, 5.2))
-    assignOf.set(`${id}/assign`, port)
-
-    // An inlet accepts a cable released anywhere within 24 units of it.
-    if (role === 'destination') {
-      dropPaths.set(`${id}/drop`, circle(port.patch, 24))
-      dropOf.set(`${id}/drop`, port)
-      dropOf.set(`${id}/patch`, port)
-    }
+    patches.push({ kind: 'patch', port, path: circle(port.patch, 5.9) })
+    assignments.push({ kind: 'assign', port, path: circle(port.assign, 5.2) })
+    if (role === 'destination') drops.push({ kind: 'drop', port, path: circle(port.patch, 24) })
   }
 
   for (let i = 1; i <= 8; i++) createPort(i, 'destination', `inlet-${i}`, targetValues[i - 1])
@@ -171,19 +148,18 @@ function hilmaPanel() {
   // routes at the bottom, then the inlets' drop zones, then the ports.
   function register() {
     ids.clear()
-    for (const [id, route] of routes) ids.set(id, stroked(route.path, 25))
-    for (const [id, path] of dropPaths) ids.set(id, filled(path))
-    for (const [id, path] of patchPaths) ids.set(id, filled(path, 4.5))
-    for (const [id, path] of assignPaths) ids.set(id, filled(path, 4.5))
+    for (const route of routes) ids.set(route, stroked(route.path, 25))
+    for (const drop of drops) ids.set(drop, filled(drop.path))
+    for (const control of [...patches, ...assignments]) ids.set(control, filled(control.path, 4.5))
     ids.set('axis', filled(axisPath, 4.5))
   }
 
   // --- State and interaction ---
 
-  let hovered: string | undefined
+  let hovered: Target | undefined
   let selectedPort: Port | undefined
-  let selectedRoute: string | undefined
-  let drag: { port: Port; start: Point; moved: boolean } | undefined
+  let selectedRoute: Route | undefined
+  let drag: Port | undefined
   let pointer: Point = { x: 0, y: 0 }
   let trail: Point[] = []
   let routeCount = 0
@@ -192,61 +168,62 @@ function hilmaPanel() {
 
   function addRoute(from: Port, to: Port) {
     const id = `route-${++routeCount}`
-    routes.set(id, { from, to, path: routePath(from.patch, to.patch) })
+    const route: Route = { kind: 'route', id, from, to, path: routePath(from.patch, to.patch) }
+    routes.add(route)
     register()
-    return id
+    return route
   }
 
-  function trackPosition(e: PointerEvent) {
-    pointer = toLayout(e.offsetX, e.offsetY)
-    if (drag && Math.hypot(pointer.x - drag.start.x, pointer.y - drag.start.y) > 5) drag.moved = true
-  }
-  canvas.addEventListener('pointerdown', trackPosition)
-  canvas.addEventListener('pointermove', trackPosition)
-
-  trackPointer(canvas, pick, (type, id, e) => {
-    if (type === 'enter') hovered = id
-    if (type === 'down') down(id ?? '', e)
-    if (type === 'up') up(id ?? '')
+  ids.track(e => {
+    if (e.type === 'enter') hovered = e.target
+    if (e.type === 'leave') hovered = undefined
+    if (e.type === 'down') down(e.target, e.event)
+    if (e.type === 'dragstart' && sourcePatch(e.target)) {
+      drag = e.target.port
+      selectedPort = drag
+      trail = []
+    }
+    if (e.type === 'drag') pointer = { x: e.x, y: e.y }
+    if (e.type === 'up') up(e.target)
+    if (e.type === 'dragcancel') up(undefined)
   })
 
-  function down(id: string, e: MouseEvent) {
+  function down(target: Target | undefined, e: PointerEvent) {
     menu.hidden = true
-    const patch = patchOf.get(id)
-    const assign = assignOf.get(id)
-    const route = routes.get(id)
+    const control = target === 'axis' ? undefined : target
+    const patch = control?.kind === 'patch' ? control.port : undefined
+    const assign = control?.kind === 'assign' ? control.port : undefined
 
-    if (patch?.role === 'source') {
-      selectedPort = patch
-      drag = { port: patch, start: pointer, moved: false }
-      trail = []
+    if (patch && patch.role === 'source') {
       say(`drag ${patch.value} to a gold inlet`)
     } else if (patch) {
       say('drop a lilac outlet here')
     } else if (assign) {
       openMenu(assign, e)
-    } else if (id === 'axis') {
+    } else if (target === 'axis') {
       say(`${routes.size} routes / field axis`)
-    } else if (route) {
+    } else if (control?.kind === 'route') {
       selectedPort = undefined
-      selectedRoute = id
-      say(`${route.from.value} → ${route.to.value}`)
+      selectedRoute = control
+      say(`${control.from.value} → ${control.to.value}`)
     } else {
       selectedPort = undefined
       selectedRoute = undefined
     }
   }
 
-  function up(id: string) {
+  function inlet(target: Target | undefined) {
+    if (target && target !== 'axis' && (target.kind === 'drop' || target.kind === 'patch') && target.port.role === 'destination') return target.port
+  }
+
+  function up(id: Target | undefined) {
     if (!drag) return
-    const { port, moved } = drag
-    const target = dropOf.get(id)
+    const port = drag
+    const target = inlet(id)
     drag = undefined
     selectedPort = undefined
 
-    if (!moved) {
-      say('drag a lilac inner port to patch')
-    } else if (!target) {
+    if (!target) {
       say('route cancelled')
     } else {
       selectedRoute = addRoute(port, target)
@@ -338,8 +315,9 @@ function hilmaPanel() {
 
   function render() {
     const c = colors()
-    const hoveredPort = patchOf.get(hovered ?? '') ?? assignOf.get(hovered ?? '')
-    const dropTarget = drag?.moved ? dropOf.get(hovered ?? '') : undefined
+    const control = hovered === 'axis' ? undefined : hovered
+    const hoveredPort = control?.kind === 'assign' || control?.kind === 'patch' ? control.port : undefined
+    const dropTarget = drag ? inlet(hovered) : undefined
 
     fit()
     ctx.clearRect(0, 0, W, H)
@@ -358,17 +336,17 @@ function hilmaPanel() {
 
     // Routes
     ctx.strokeStyle = c.lilac
-    for (const [id, route] of routes) {
-      const active = id === selectedRoute || id === hovered
-      ctx.lineWidth = id === selectedRoute ? 3.3 : 1.8
+    for (const route of routes) {
+      const active = route === selectedRoute || route === hovered
+      ctx.lineWidth = route === selectedRoute ? 3.3 : 1.8
       ctx.globalAlpha = active ? 1 : 0.65
       ctx.stroke(route.path)
     }
     ctx.globalAlpha = 1
 
-    if (drag?.moved) {
+    if (drag) {
       ctx.lineWidth = 2
-      drawCable(drag.port.patch)
+      drawCable(drag.patch)
     }
 
     // Axis
@@ -397,8 +375,7 @@ function hilmaPanel() {
       ctx.fillText(port.role === 'source' ? 'OUT' : 'IN', port.label.x, port.label.y + 10)
     }
 
-    for (const [id, path] of patchPaths) {
-      const port = patchOf.get(id)!
+    for (const { port, path } of patches) {
       ctx.fillStyle = port.role === 'source' ? c.lilac : c.surface
       ctx.strokeStyle = port.role === 'source' ? c.surface : c.gold
       ctx.lineWidth = port.role === 'source' ? 1.15 : 1.8
@@ -410,8 +387,7 @@ function hilmaPanel() {
       }
     }
 
-    for (const [id, path] of assignPaths) {
-      const port = assignOf.get(id)!
+    for (const { port, path } of assignments) {
       const active = port === selectedPort || port === hoveredPort
       if (port.role === 'source') {
         ctx.globalAlpha = active ? 1 : 0.5
@@ -429,15 +405,15 @@ function hilmaPanel() {
     }
 
     if (showBuffer.checked) {
-      ids.pick(0, 0) // forces the lazy redraw
       ctx.globalAlpha = 0.85
-      ctx.drawImage(picker.ctx.canvas, 0, 0)
+      ids.drawBuffer(ctx)
       ctx.globalAlpha = 1
     }
 
-    const source = patchOf.get(hovered ?? '')?.role === 'source'
-    canvas.style.cursor = drag ? 'grabbing' : source ? 'grab' : hoveredPort || routes.has(hovered ?? '') ? 'pointer' : 'default'
-    out.textContent = `hover: ${hovered ?? '–'}   selected: ${selectedRoute ?? '–'}   routes: ${routes.size}`
+    const source = control?.kind === 'patch' && control.port.role === 'source'
+    canvas.style.cursor = drag ? 'grabbing' : source ? 'grab' : hoveredPort || control?.kind === 'route' ? 'pointer' : 'default'
+    const label = control?.kind === 'route' ? control.id : control ? `${control.port.id}/${control.kind}` : hovered
+    out.textContent = `hover: ${label ?? '–'}   selected: ${selectedRoute?.id ?? '–'}   routes: ${routes.size}`
     requestAnimationFrame(render)
   }
 
@@ -463,8 +439,6 @@ function envelopePanel() {
   canvas.style.height = H + 'px'
   ctx.scale(devicePixelRatio, devicePixelRatio)
 
-  const picker = createPicker(W, H)
-  const ids = createIdPicker(picker)
 
   const points = [
     { id: 'start', x: PAD, y: H - PAD },
@@ -482,8 +456,10 @@ function envelopePanel() {
     { id: 'release', bend: 0.6 },
   ]
 
-  const segmentPaths = new Map<string, Path2D>()
-  const pointPaths = new Map<string, Path2D>()
+  type Handle = typeof points[number] | typeof segments[number]
+  const ids = createPicker<Handle>(canvas, { width: W, height: H })
+  const segmentPaths = new Map<typeof segments[number], Path2D>()
+  const pointPaths = new Map<typeof points[number], Path2D>()
 
   // Geometry only: one path per id. Called on every drag step.
   function buildPaths() {
@@ -498,43 +474,38 @@ function envelopePanel() {
         b.x,
         b.y,
       )
-      segmentPaths.set(segment.id, path)
+      segmentPaths.set(segment, path)
     })
 
-    for (const point of points) pointPaths.set(point.id, circle(point, 5))
+    for (const point of points) pointPaths.set(point, circle(point, 5))
   }
 
   // The only picking code in this panel. Points are registered last so they
   // sit on top of the curves that end in them. The pick buffer itself is
   // only redrawn on the next pick.
   function register() {
-    ids.clear()
     for (const [id, path] of segmentPaths) ids.set(id, stroked(path, 14))
     for (const [id, path] of pointPaths) ids.set(id, filled(path, 4))
   }
 
-  let hovered: string | undefined
-  let dragging: string | undefined
+  let hovered: Handle | undefined
+  let dragging: Handle | undefined
   let lastY = 0
 
-  // Registered before trackPointer, so its hover pick during a drag sees the
-  // geometry this drag step just built.
-  canvas.addEventListener('pointermove', (e) => {
-    if (!dragging) return
-    const point = points.find((p) => p.id === dragging)
-    if (point) movePoint(point, e.offsetX, e.offsetY)
-    else bendSegment(dragging, e.offsetY - lastY)
-    lastY = e.offsetY
-    buildPaths()
-    register()
-  })
-
-  trackPointer(canvas, ids.pick, (type, id, e) => {
-    if (type === 'enter') hovered = id
-    if (type === 'up') dragging = undefined
-    if (type === 'down') {
-      dragging = id
-      lastY = e.offsetY
+  ids.track(e => {
+    if (e.type === 'enter') hovered = e.target
+    if (e.type === 'leave') hovered = undefined
+    if (e.type === 'dragstart') {
+      dragging = e.target
+      lastY = e.startY
+    }
+    if (e.type === 'dragend' || e.type === 'dragcancel') dragging = undefined
+    if (e.type === 'drag') {
+      if ('x' in e.target) movePoint(e.target, e.x, e.y)
+      else bendSegment(e.target, e.y - lastY)
+      lastY = e.y
+      buildPaths()
+      register()
     }
   })
 
@@ -549,8 +520,8 @@ function envelopePanel() {
     if (i === 2 || i === 3) points[2].y = points[3].y = point.y
   }
 
-  function bendSegment(id: string, dy: number) {
-    const i = segments.findIndex((s) => s.id === id)
+  function bendSegment(segment: typeof segments[number], dy: number) {
+    const i = segments.indexOf(segment)
     const direction = Math.sign(points[i + 1].y - points[i].y)
     segments[i].bend = clamp(segments[i].bend + (dy / 60) * direction, -1, 1)
   }
@@ -573,7 +544,7 @@ function envelopePanel() {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     segments.forEach((segment, i) => {
-      ctx.fillStyle = segment.id === active ? c.accent : c.muted
+      ctx.fillStyle = segment === active ? c.accent : c.muted
       ctx.fillText(segment.id[0].toUpperCase(), (points[i].x + points[i + 1].x) / 2, H - 8)
     })
 
@@ -592,14 +563,13 @@ function envelopePanel() {
     }
 
     if (showBuffer.checked) {
-      ids.pick(0, 0) // forces the lazy redraw
       ctx.globalAlpha = 0.85
-      ctx.drawImage(picker.ctx.canvas, 0, 0)
+      ids.drawBuffer(ctx)
       ctx.globalAlpha = 1
     }
 
     canvas.style.cursor = dragging ? 'grabbing' : hovered ? 'grab' : 'default'
-    out.textContent = `hover: ${hovered ?? '–'}   dragging: ${dragging ?? '–'}`
+    out.textContent = `hover: ${hovered?.id ?? '–'}   dragging: ${dragging?.id ?? '–'}`
     requestAnimationFrame(render)
   }
 

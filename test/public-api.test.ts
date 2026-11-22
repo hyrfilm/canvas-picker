@@ -87,13 +87,30 @@ test('a drop can pick through a widget registered above its tray', async () => {
     picker.invalidate()
   })
   picker.on('widget', 'dragend', e => {
-    destination = picker.pick(e.x, e.y, { ignore: e.target })
+    destination = picker.pick(e.x, e.y, { ignore: [e.target] })
     expect(picker.pick(e.x, e.y)).toBe('widget')
   })
   await userEvent.dragAndDrop(canvas, canvas, { sourcePosition: { x: 25, y: 30 }, targetPosition: { x: 125, y: 30 } })
   expect(x).toBe(110)
   expect(destination).toBe('tray')
   picker.dispose()
+})
+
+test('pick ignore accepts arrays and Sets of one or more targets', () => {
+  const picker = createPicker<string | number>({ width: 40, height: 40 })
+  const fill = (ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D) => ctx.fillRect(0, 0, 40, 40)
+  picker.set('tray', fill)
+  picker.set('middle', fill)
+  picker.set(NaN, fill)
+
+  expect(picker.pick(10, 10)).toBeNaN()
+  expect(picker.pick(10, 10, { ignore: [] })).toBeNaN()
+  expect(picker.pick(10, 10, { ignore: ['missing'] })).toBeNaN()
+  expect(picker.pick(10, 10, { ignore: [NaN] })).toBe('middle')
+  expect(picker.pick(10, 10, { ignore: [NaN, 'middle'] })).toBe('tray')
+  expect(picker.pick(10, 10, { ignore: new Set<string | number>([NaN, 'middle']) })).toBe('tray')
+  expect(picker.pick(10, 10, { ignore: new Set<string | number>(['tray', 'middle', NaN]) })).toBeUndefined()
+  expect(() => picker.pick(10, 10, { ignore: 'middle' as unknown as string[] })).toThrow(TypeError)
 })
 
 test('empty-space subscriptions survive clear and disposal removes all subscriptions', async () => {

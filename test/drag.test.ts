@@ -162,3 +162,17 @@ test('removing another target or updating geometry preserves the active gesture'
     expect(events).toEqual(['end'])
   } finally { picker.dispose(); el.remove() }
 })
+
+test.each(['pointercancel', 'lostpointercapture'] as const)('native %s event is forwarded on dragcancel', type => {
+  const el = canvas()
+  const picker = createPicker(el, { mapPoint: e => ({ x: e.clientX, y: 10 }) })
+  picker.set('a', ctx => ctx.fillRect(0, 0, 100, 100))
+  const eventTypes: string[] = []
+  picker.on('dragcancel', e => eventTypes.push(e.event.type))
+  try {
+    el.dispatchEvent(new PointerEvent('pointerdown', { clientX: 10, pointerId: 1, isPrimary: true, button: 0, buttons: 1 }))
+    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 30, pointerId: 1, isPrimary: true, buttons: 1 }))
+    el.dispatchEvent(new PointerEvent(type, { clientX: 30, pointerId: 1, isPrimary: true }))
+    expect(eventTypes).toEqual([type])
+  } finally { picker.dispose(); el.remove() }
+})

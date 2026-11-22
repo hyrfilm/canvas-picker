@@ -1,5 +1,5 @@
 {
-  "name": "canvas-picker",
+  "name": "@hyrfilm/canvas-picker",
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "build:package": "tsc -p tsconfig.package.json",
+    "build:package": "vite build --config vite.package.config.ts && tsc -p tsconfig.package.json",
     "prepack": "npm run build:package"
   },
   "devDependencies": {
@@ -23,6 +23,19 @@
     "vitest": "^5.1.0"
   },
   "description": "Hit testing, pointer events, and dragging for shapes on a 2D canvas.",
+  "keywords": [
+    "canvas",
+    "canvas2d",
+    "hit-testing",
+    "color-picking",
+    "pointer-events",
+    "drag",
+    "offscreen-canvas"
+  ],
+  "homepage": "https://hyrfilm.github.io/canvas-picker/",
+  "bugs": {
+    "url": "https://github.com/hyrfilm/canvas-picker/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/hyrfilm/canvas-picker.git"

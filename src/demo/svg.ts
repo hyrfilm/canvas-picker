@@ -42,10 +42,18 @@ function svgTriangles(parent: HTMLElement, options: PickingOptions, showBuffer: 
     } else return
     render()
   })
-  const resize = new ResizeObserver(render)
+  let resizeFrame = 0
+  const resize = new ResizeObserver(() => {
+    if (!resizeFrame) resizeFrame = requestAnimationFrame(() => { resizeFrame = 0; render() })
+  })
   resize.observe(canvas)
   render()
-  return () => { stop(); resize.disconnect() }
+  return () => {
+    if (resizeFrame) cancelAnimationFrame(resizeFrame)
+    resize.disconnect()
+    stop()
+    ids.dispose()
+  }
 }
 
 export { svgTriangles }

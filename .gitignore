@@ -46,3 +46,5 @@ coverage/
 .turbo/
 *.tsbuildinfo
 .vitest/
+flake.nix
+flake.lock

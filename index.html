@@ -1,215 +1,87 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Canvas Pick Buffer Demo</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap">
-<style>
-  /* Layout: a short header, then two instrument panels stacked: the wide patch field, then the envelope. */
-  :root {
-    --bg: #eef0ee;
-    --surface: #fafbfa;
-    --ink: #1b2228;
-    --muted: #63707b;
-    --line: #cfd5d3;
-    --accent: #1f6fd6;
-    --mark: #d6452a;
-    --lilac: oklch(66% .075 300);
-    --gold: oklch(74% .11 88);
-    --font-body: "IBM Plex Sans", system-ui, sans-serif;
-    --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      color-scheme: dark;
-      --bg: #14181b;
-      --surface: #1c2125;
-      --ink: #e4e8ea;
-      --muted: #8d99a3;
-      --line: #333b41;
-      --accent: #6aa5ff;
-      --mark: #ff7b5a;
-      --lilac: oklch(76% .08 300);
-      --gold: oklch(82% .1 90);
-    }
-  }
-  :root[data-theme="dark"] {
-    color-scheme: dark;
-    --bg: #14181b;
-    --surface: #1c2125;
-    --ink: #e4e8ea;
-    --muted: #8d99a3;
-    --line: #333b41;
-    --accent: #6aa5ff;
-    --mark: #ff7b5a;
-    --lilac: oklch(76% .08 300);
-    --gold: oklch(82% .1 90);
-  }
-
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    padding: 32px 16px 48px;
-    background: var(--bg);
-    color: var(--ink);
-    font: 400 15px/1.5 var(--font-body);
-  }
-  main {
-    max-width: 920px;
-    margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-  }
-  header {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  h1 {
-    margin: 0;
-    font-size: 24px;
-    font-weight: 600;
-    text-wrap: balance;
-  }
-  h2 {
-    margin: 0;
-    font-size: 15px;
-    font-weight: 600;
-  }
-  p { margin: 0; max-width: 65ch; }
-  code { font-family: var(--font-mono); font-size: 0.92em; }
-  .toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    width: fit-content;
-    cursor: pointer;
-  }
-  .toggle input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
-  .toggle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .panels {
-    display: flex;
-    flex-direction: column;
-    gap: 32px;
-  }
-  .panel {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    max-width: 100%;
-  }
-  .stage {
-    max-width: 100%;
-    overflow-x: auto;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-  }
-  canvas { display: block; touch-action: none; user-select: none; }
-  #field { width: 100%; aspect-ratio: 1000 / 820; }
-  .bar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    border-top: 1px solid var(--line);
-  }
-  #field-status {
-    margin-right: auto;
-    color: var(--muted);
-    font: 400 11px/1.4 var(--font-mono);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-  }
-  button {
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 5px 12px;
-    background: var(--bg);
-    color: var(--ink);
-    font: 400 12px var(--font-body);
-    cursor: pointer;
-  }
-  button:hover { border-color: var(--muted); }
-  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  #assign-menu {
-    position: fixed;
-    z-index: 2;
-    width: min(274px, calc(100vw - 28px));
-    max-height: min(390px, calc(100vh - 28px));
-    overflow: auto;
-    padding: 8px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: var(--surface);
-    box-shadow: 0 12px 32px rgb(0 0 0 / .18);
-  }
-  #assign-menu[hidden] { display: none; }
-  .menu-title {
-    padding: 4px 6px 8px;
-    color: var(--muted);
-    font: 400 10px var(--font-mono);
-    letter-spacing: .08em;
-    text-transform: uppercase;
-  }
-  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
-  .choice {
-    overflow: hidden;
-    border: 0;
-    border-radius: 6px;
-    padding: 6px 8px;
-    background: transparent;
-    text-align: left;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .choice:hover, .choice.current { background: var(--bg); }
-  .readout {
-    font: 400 12px/1.4 var(--font-mono);
-    color: var(--muted);
-    white-space: pre-wrap;
-    min-height: 1.4em;
-  }
-  .hint { color: var(--muted); }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive examples of hit testing and pointer events on a 2D canvas.">
+  <title>canvas-picker</title>
+  <link rel="stylesheet" href="/src/lab.css">
 </head>
 <body>
-<main>
-  <nav style="display:flex;gap:20px;font-size:13px"><a href="/">Instruments</a><a href="/playground.html">Playground</a><a href="/checks.html">Browser checks</a></nav>
-  <header>
-    <h1>Canvas pick buffer demo</h1>
-    <p>Both panels are drawn on canvas 2D and hit-tested through <code>pick.ts</code>. Nothing here calculates whether a point is inside a shape.</p>
-    <label class="toggle" for="show-buffer">
-      <input type="checkbox" id="show-buffer">
-      Show pick buffer
-    </label>
-  </header>
-
-  <div class="panels">
-    <section class="panel">
-      <h2>Hilma field</h2>
-      <div class="stage">
-        <canvas id="field" aria-label="Hilma field with eight outlets and eight inlets"></canvas>
-        <div class="bar">
-          <span id="field-status">field axis / 8 outlets / 8 inlets</span>
-          <button id="clear-routes">Clear routes</button>
+  <header class="opening" id="top">
+    <canvas id="circle-field" aria-label="Moving circles. Hover to outline a circle and click to change its colour."></canvas>
+      <div class="opening-header">
+        <div class="opening-controls">
+          <button id="circle-motion" type="button">Pause motion</button>
+        </div>
+        <div>
+          <strong>canvas-picker</strong><div></div>Hit testing and pointer events for Canvas 2D.</div>
+        </div>    
+        <div>
+          <a href="https://github.com/hyrfilm/canvas-picker">GitHub ↗</a>
         </div>
       </div>
-      <div class="readout" id="field-out"></div>
-      <p class="hint">Drag from a lilac inner port to a gold one to patch a cable. Click a cable to select it, then press Delete to remove it. Click an outer port to reassign it.</p>
+  </header>
+
+  <main>
+    <section class="example" id="connector" aria-labelledby="connector-title">
+      <h2 id="connector-title">Node connector</h2>
+      <p>Click a bottom port, then a top port on another node to connect them.</p>
+      <div class="connector-stage">
+        <canvas id="connector-field" tabindex="0" aria-label="Node connector. Select an outlet and then an inlet on another node."></canvas>
+        <div class="connector-controls">
+          <output id="connector-status" aria-live="polite">0 connections</output>
+          <button id="clear-connections" type="button">Clear connections</button>
+        </div>
+      </div>
     </section>
 
-    <section class="panel">
-      <h2>Envelope</h2>
-      <div class="stage"><canvas id="envelope"></canvas></div>
-      <div class="readout" id="envelope-out"></div>
-      <p class="hint">Drag a point to move it. Drag a curve up or down to bend it.</p>
+    <section class="example" id="playground" aria-labelledby="playground-title">
+      <h2 id="playground-title">Picking playground</h2>
+      <p>Try different ways of reading the hidden pick buffer.</p>
+      <div class="controls">
+        <label>Picking method <select id="mode"></select></label>
+        <label><input type="checkbox" id="buffer"> Show pick buffer</label>
+      </div>
+      <p id="method" class="muted"></p>
+      <div class="grid" id="scenes"></div>
     </section>
-  </div>
-</main>
-<div id="assign-menu" hidden></div>
-<script type="module" src="/src/demo.ts"></script>
+
+    <section class="example" id="basics" aria-labelledby="basics-title">
+      <h2 id="basics-title">Canvas picker basics</h2>
+      <p>Each example draws the same two shapes. Click either shape or the empty space.</p>
+      <div class="basic-grid">
+        <section class="card">
+          <h3>Read a numeric index</h3>
+          <canvas id="indices" aria-label="Rectangle and circle picked by numeric index"></canvas>
+          <output id="indices-result" class="readout"></output>
+        </section>
+        <section class="card">
+          <h3>Give shapes string IDs</h3>
+          <canvas id="ids" aria-label="Rectangle and circle picked by string ID"></canvas>
+          <output id="ids-result" class="readout"></output>
+        </section>
+        <section class="card">
+          <h3>Listen for pointer events</h3>
+          <canvas id="events" aria-label="Hover and click the rectangle or circle"></canvas>
+          <output id="events-result" class="readout">Hover or click a shape.</output>
+          <button id="stop-events" type="button">Stop tracking</button>
+        </section>
+      </div>
+    </section>
+
+    <section class="example" id="checks" aria-labelledby="checks-title">
+      <h2 id="checks-title">Browser checks</h2>
+      <p>Run the same picking checks as <code>npm test</code> in your browser.</p>
+      <div class="controls"><button id="run" type="button">Run checks</button><output id="summary" aria-live="polite"></output></div>
+      <ol class="checks" id="check-results"></ol>
+    </section>
+  </main>
+
+  <script type="module" src="/examples/moving-circles.ts"></script>
+  <script type="module" src="/examples/node-connector.ts"></script>
+  <script type="module" src="/src/playground.ts"></script>
+  <script type="module" src="/examples/basic.ts"></script>
+  <script type="module" src="/src/checks-page.ts"></script>
 </body>
 </html>

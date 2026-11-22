@@ -20,5 +20,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "test", "examples", "experiments/timers.ts", "experiments/timers-render.ts"]
+  "include": ["src", "test", "examples"]
 }

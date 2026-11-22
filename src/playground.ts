@@ -1,6 +1,6 @@
 import { createPicker } from './index.js'
 import { circleScene, collisionScene, thinScene, type Scene } from '../test/scenarios'
-import { movingCircles, polygons } from './demo/widgets'
+import { polygons } from './demo/widgets'
 import { svgTriangles } from './demo/svg'
 
 const modes = [
@@ -37,13 +37,12 @@ function build() {
   description.textContent = mode.description
   disposeWidgets = [
     polygons(grid, mode, showBuffer.checked),
-    movingCircles(grid, mode, showBuffer.checked),
     svgTriangles(grid, mode, showBuffer.checked),
   ]
   for (const entry of scenes) {
     const card = document.createElement('section')
     card.className = 'card'
-    const heading = document.createElement('h2')
+    const heading = document.createElement('h3')
     heading.textContent = entry.name
     const hint = document.createElement('p')
     hint.textContent = entry.description
@@ -83,13 +82,14 @@ function build() {
       canvas.style.cursor = hovered ? 'pointer' : 'default'
     }
 
-    disposeWidgets.push(ids.track(e => {
+    const stop = ids.track(e => {
       if (e.type === 'enter') hovered = e.target
       else if (e.type === 'leave') hovered = undefined
       else if (e.type === 'down') selected = e.target
       else return
       render()
-    }))
+    })
+    disposeWidgets.push(() => { stop(); ids.dispose() })
     renderPanels.push(render)
     render()
   }

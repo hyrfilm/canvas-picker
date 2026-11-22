@@ -1,56 +1,8 @@
 import { createPicker, type PickingOptions } from '../index.js'
-import { circleScene } from '../../test/scenarios'
 import { canvasPanel } from './canvas'
 
-let circleTime = 0, circlesPaused = false
 const drawnPolygons: { id: string; path: Path2D; x: number; y: number }[] = []
 let nextPolygonId = 0
-
-function movingCircles(parent: HTMLElement, options: PickingOptions, showBuffer: boolean) {
-  const view = canvasPanel(parent, 'Moving circles', 'Hover a moving shape, or click to keep it selected. Picking also updates while the pointer stays still.', 320, 220)
-  const { ctx, canvas, fit, readout, card } = view
-  const button = document.createElement('button')
-  button.textContent = circlesPaused ? 'Resume circles' : 'Pause circles'
-  card.insertBefore(button, canvas)
-  const scene = circleScene(80, 320, 220)
-  const ids = createPicker(canvas, { width: 320, height: 220, ...options })
-  let previous = performance.now()
-  let pointer: { x: number; y: number } | undefined
-  let selected: string | undefined
-  for (const [i, shape] of scene.shapes.entries()) {
-    const draw = shape.draw
-    shape.draw = target => {
-      target.translate(Math.sin(circleTime * .6 + i) * 14, Math.cos(circleTime * .45 + i * .7) * 12)
-      draw(target)
-    }
-    ids.set(shape.id, shape.draw)
-  }
-  button.addEventListener('click', () => { circlesPaused = !circlesPaused; button.textContent = circlesPaused ? 'Resume circles' : 'Pause circles' })
-  const stop = ids.track(e => {
-    if (e.type === 'move') pointer = { x: e.x, y: e.y }
-    if (e.type === 'leave') pointer = undefined
-    if (e.type === 'click') selected = e.target
-  })
-  let frame: number
-  function render(now: number) {
-    if (!circlesPaused) { circleTime += Math.min((now - previous) / 1000, .05); ids.invalidate() }
-    previous = now
-    const hovered = pointer ? ids.pick(pointer.x, pointer.y) : undefined
-    fit()
-    if (showBuffer) { ids.drawBuffer(ctx) }
-    else scene.shapes.forEach((shape, i) => {
-      ctx.save(); ctx.beginPath()
-      ctx.fillStyle = ctx.strokeStyle = shape.id === hovered || shape.id === selected ? '#d35c43' : `hsl(${(i * 137.5 + 135) % 360} 32% 58%)`
-      shape.draw(ctx)
-      ctx.restore()
-    })
-    readout.textContent = `hover: ${hovered ?? '—'}\nselected: ${selected ?? '—'}`
-    canvas.style.cursor = hovered ? 'pointer' : 'default'
-    frame = requestAnimationFrame(render)
-  }
-  frame = requestAnimationFrame(render)
-  return () => { stop(); cancelAnimationFrame(frame) }
-}
 
 function polygons(parent: HTMLElement, options: PickingOptions, showBuffer: boolean) {
   const width = 400, height = 260
@@ -157,9 +109,17 @@ function polygons(parent: HTMLElement, options: PickingOptions, showBuffer: bool
     canvas.style.cursor = drawing ? 'crosshair' : dragging ? 'grabbing' : hovered ? 'grab' : 'default'
   }
   draftChanged()
-  const resize = new ResizeObserver(render)
+  let resizeFrame = 0
+  const resize = new ResizeObserver(() => {
+    if (!resizeFrame) resizeFrame = requestAnimationFrame(() => { resizeFrame = 0; render() })
+  })
   resize.observe(canvas)
-  return () => { resize.disconnect(); stop() }
+  return () => {
+    if (resizeFrame) cancelAnimationFrame(resizeFrame)
+    resize.disconnect()
+    stop()
+    ids.dispose()
+  }
 }
 
-export { movingCircles, polygons }
+export { polygons }

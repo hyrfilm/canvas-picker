@@ -2,7 +2,7 @@ import { checks } from '../test/checks'
 
 const button = document.querySelector<HTMLButtonElement>('#run')!
 const summary = document.querySelector<HTMLOutputElement>('#summary')!
-const list = document.querySelector<HTMLOListElement>('#checks')!
+const list = document.querySelector<HTMLOListElement>('#check-results')!
 
 async function run() {
   button.disabled = true
@@ -48,4 +48,3 @@ async function run() {
 }
 
 button.addEventListener('click', run)
-run()

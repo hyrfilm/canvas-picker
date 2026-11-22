@@ -1,4 +1,4 @@
-// Run `npm run dev`, then open /examples/basic.html.
+// Run `npm run dev`, then open the gallery at /#basics.
 // Each example uses its own canvas and picker. They share only the visible shapes.
 import { createIndexPicker } from '../src/index-buffer.js'
 import { createPicker, filled } from '../src/index.js'

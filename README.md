@@ -1,8 +1,9 @@
-# @hyrfilm/canvas-picker
+# [demos](https://hyrfilm.github.io/canvas-picker/)
+
+
+## canvas-picker
 
 Detects shapes on Canvas 2D from x,y coordinates, mouse, or touch events. Bind event listeners to shapes and treat them like DOM objects.
-
-[Examples & demos](https://hyrfilm.github.io/canvas-picker/)
 
 ## Installing
 

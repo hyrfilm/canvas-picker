@@ -1,5 +1,5 @@
-# [demos](https://hyrfilm.github.io/canvas-picker/)
-
+# examples & demos
+[demos](https://hyrfilm.github.io/canvas-picker/)
 
 ## canvas-picker
 
